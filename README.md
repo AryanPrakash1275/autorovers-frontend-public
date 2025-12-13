@@ -1,73 +1,120 @@
-# React + TypeScript + Vite
+# Autorovers Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A **specs-first vehicle catalog UI** for bikes and cars, built with React + TypeScript.
+Includes a **public browsing experience** and a **protected admin panel** for managing vehicles.
 
-Currently, two official plugins are available:
+This project is part of the **Autorovers** system and is designed to be clean, predictable, and portfolio-grade.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+---
 
-## React Compiler
+## Live Links
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+- **Public UI**: https://autorovers-frontend.vercel.app/vehicles  
+- **API (Swagger)**: https://autorovers-api.onrender.com/swagger/index.html  
 
-## Expanding the ESLint configuration
+---
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+## What This App Does
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+### Public
+- Browse bikes and cars in a unified catalog
+- Search by brand / model / variant
+- Filter by vehicle type (bike / car)
+- Sort by price or year
+- Detailed vehicle pages with structured specs
+- Defensive rendering for missing / optional data
+- Fully responsive layout
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+### Admin
+- JWT-based login
+- Protected admin routes
+- Vehicle list with sorting
+- Create / edit vehicles using a slide-over form
+- Basic validation and error handling
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+---
+
+## Tech Stack
+
+- **Frontend**: React + TypeScript (Vite)
+- **Routing**: React Router
+- **State**: Local state + hooks
+- **Styling**: Plain CSS (`public.css`, `admin.css`)
+- **Auth**: JWT (token stored client-side)
+- **Deployment**: Vercel
+
+---
+
+## Project Structure (Simplified)
+
+```txt
+src/
+├── public/                # Public pages (catalog, details, login)
+├── features/
+│   ├── auth/              # Auth API + storage
+│   └── vehicles/          # Vehicle domain (types, API, components)
+├── components/layout/     # Shared layouts
+├── styles/
+│   ├── public.css
+│   └── admin.css
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+---
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+## Local Setup
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+### 1. Install dependencies
+
+```bash
+npm install
 ```
+
+### 2. Environment variables
+
+Create a `.env.local` file (**never commit this**):
+
+```env
+VITE_API_BASE_URL=https://autorovers-api.onrender.com
+```
+
+### 3. Run locally
+
+```bash
+npm run dev
+```
+
+Open: [http://localhost:5173/vehicles](http://localhost:5173/vehicles)
+
+---
+
+## Deployment
+
+Deployed using **Vercel**.
+
+* Set `VITE_API_BASE_URL` in Vercel Environment Variables
+* Build command: `npm run build`
+* Output directory: `dist`
+
+---
+
+## Security Notes
+
+* Admin endpoints are protected via JWT
+* `.env.local` is ignored and must never be committed
+* Sensitive values are configured only via environment variables
+
+---
+
+## Roadmap
+
+* Bulk vehicle import for admin
+* Pagination / infinite scroll on catalog
+* Improved admin form validation UX
+* Better image placeholders & fallbacks
+* Performance optimizations
+
+---
+
+## License
+
+MIT
