@@ -1,7 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 
-import type { Vehicle } from "../features/vehicles/types";
+import type {
+  VehicleWithDetailsDto,
+  VehicleDetailsDto,
+} from "../features/vehicles/types";
 import { getPublicVehicleBySlug } from "../features/vehicles/api";
 import { Footer } from "./Footer";
 
@@ -10,56 +13,90 @@ type MaybeError = { message?: string };
 const FALLBACK_IMG =
   "https://dummyimage.com/600x400/cccccc/000000&text=No+Image";
 
-function n(v: unknown): number | null {
-  return typeof v === "number" && Number.isFinite(v) ? v : null;
-}
+/* =======================
+   Helpers
+======================= */
 
-function s(v: unknown): string {
-  return typeof v === "string" ? v : "";
+function hasValue(v: unknown): boolean {
+  if (v === null || v === undefined) return false;
+  if (typeof v === "string") return v.trim().length > 0;
+  if (typeof v === "number") return Number.isFinite(v) && v > 0;
+  if (typeof v === "boolean") return true;
+  return false;
 }
 
 function text(v: unknown): string {
-  const t = s(v).trim();
-  return t.length ? t : "—";
+  return hasValue(v) ? String(v) : "—";
 }
 
-function unit(val: unknown, u: string): string {
-  const x = n(val);
-  return x !== null && x > 0 ? `${x} ${u}` : "—";
+function unit(v: unknown, u: string): string {
+  return hasValue(v) ? `${v} ${u}` : "—";
 }
 
-function powerText(power: unknown, rpm: unknown): string {
-  const p = n(power);
-  const r = n(rpm);
-  if (p === null || p <= 0) return "—";
-  if (r !== null && r > 0) return `${p} bhp @ ${r} rpm`;
-  return `${p} bhp`;
+function powerText(power?: number | null, rpm?: number | null): string {
+  if (!power || power <= 0) return "—";
+  return rpm && rpm > 0 ? `${power} bhp @ ${rpm} rpm` : `${power} bhp`;
 }
 
-function torqueText(torque: unknown, rpm: unknown): string {
-  const t = n(torque);
-  const r = n(rpm);
-  if (t === null || t <= 0) return "—";
-  if (r !== null && r > 0) return `${t} Nm @ ${r} rpm`;
-  return `${t} Nm`;
+function torqueText(torque?: number | null, rpm?: number | null): string {
+  if (!torque || torque <= 0) return "—";
+  return rpm && rpm > 0 ? `${torque} Nm @ ${rpm} rpm` : `${torque} Nm`;
 }
+
+function parseColors(json?: string | null): string[] {
+  if (!json) return [];
+  try {
+    const arr = JSON.parse(json);
+    return Array.isArray(arr) ? arr.map(String).filter(Boolean) : [];
+  } catch {
+    return [];
+  }
+}
+
+/* =======================
+   Component
+======================= */
 
 export function VehicleDetailsPage() {
   const { slug } = useParams<{ slug: string }>();
 
-  const [vehicle, setVehicle] = useState<Vehicle | null>(null);
+  const [vehicle, setVehicle] =
+    useState<VehicleWithDetailsDto | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const type = ((s(vehicle?.vehicleType) || s(vehicle?.category)).toLowerCase());
-  const isBike = type.includes("bike");
-  const isCar = type.includes("car");
+  /* =======================
+     ALL HOOKS COME FIRST
+  ======================= */
+
+  const title = useMemo(() => {
+    if (!vehicle) return "Vehicle";
+    return [vehicle.brand, vehicle.model, vehicle.variant]
+      .filter(Boolean)
+      .join(" ");
+  }, [vehicle]);
+
+  const price = useMemo(() => {
+    if (!vehicle || typeof vehicle.price !== "number" || vehicle.price <= 0)
+      return "—";
+    return `₹ ${vehicle.price.toLocaleString("en-IN")}`;
+  }, [vehicle]);
+
+  const details: VehicleDetailsDto = vehicle?.details ?? {};
+
+  const colors = useMemo(
+    () => parseColors(details.colorsAvailableJson),
+    [details.colorsAvailableJson]
+  );
+
+  /* =======================
+     Data Fetch
+  ======================= */
 
   useEffect(() => {
     if (!slug) {
-      setLoading(false);
-      setVehicle(null);
       setError("Missing vehicle slug.");
+      setLoading(false);
       return;
     }
 
@@ -69,11 +106,9 @@ export function VehicleDetailsPage() {
       try {
         setLoading(true);
         setError(null);
-
         const data = await getPublicVehicleBySlug(slug);
         if (alive) setVehicle(data);
       } catch (err: unknown) {
-        console.error(err);
         const maybe = err as MaybeError;
         if (alive) setError(maybe?.message ?? "Failed to load vehicle");
       } finally {
@@ -86,46 +121,20 @@ export function VehicleDetailsPage() {
     };
   }, [slug]);
 
+  /* =======================
+     Early Returns (SAFE)
+  ======================= */
+
   if (loading) return <div className="public-page">Loading vehicle…</div>;
   if (error) return <div className="public-page error">{error}</div>;
   if (!vehicle) return <div className="public-page">Vehicle not found.</div>;
 
   const v = vehicle;
+  const d = details;
 
-  const title =
-    `${s(v.brand)} ${s(v.model)} ${s(v.variant)}`.trim() || "Vehicle";
-
-  const powerHighlight =
-    n(v.power) !== null && (v.power as number) > 0 ? `${v.power} bhp` : "—";
-  const torqueHighlight =
-    n(v.torque) !== null && (v.torque as number) > 0 ? `${v.torque} Nm` : "—";
-
-  const powerDetail = powerText(v.power, v.powerRpm);
-  const torqueDetail = torqueText(v.torque, v.torqueRpm);
-
-  const mileage = unit(v.mileage, "kmpl");
-  const tank = unit(v.tankSize, "L");
-  const range = unit(v.range, "km");
-
-  const length = unit(v.length, "mm");
-  const width = unit(v.width, "mm");
-  const height = unit(v.height, "mm");
-  const wheelbase = unit(v.wheelBase, "mm");
-  const groundClearance = unit(v.groundClearance, "mm");
-  const weight = unit(v.weight, "kg");
-
-  const boot = unit(v.bootSpace, "L");
-  const seating =
-    n(v.personCapacity) !== null && (v.personCapacity as number) > 0
-      ? `${v.personCapacity} persons`
-      : "—";
-
-  const priceTextValue =
-    typeof v.price === "number" && v.price > 0
-      ? `₹ ${v.price.toLocaleString("en-IN")}`
-      : "—";
-
-  const imgSrc = s(v.imageUrl) || FALLBACK_IMG;
+  /* =======================
+     Render
+  ======================= */
 
   return (
     <div className="public-page">
@@ -140,39 +149,59 @@ export function VehicleDetailsPage() {
           <h1 className="vehicle-title">{title}</h1>
 
           <p className="vehicle-subtitle">
-            {v.year ?? "—"} • {v.category ?? "—"} • {v.transmission ?? "—"}
+            {text(v.year)} • {text(v.category)} • {text(v.transmission)}
           </p>
 
-          <p className="vehicle-price">{priceTextValue}</p>
+          <div className="vehicle-features">
+            {hasValue(v.category) && (
+              <span className="feature-badge">{text(v.category)}</span>
+            )}
+            {hasValue(v.transmission) && (
+              <span className="feature-badge">{text(v.transmission)}</span>
+            )}
+            {hasValue(d.specification) && (
+              <span className="feature-badge">{text(d.specification)}</span>
+            )}
+            {hasValue(d.engineType) && (
+              <span className="feature-badge">{text(d.engineType)}</span>
+            )}
+            {colors.length > 0 && (
+              <span className="feature-badge">{colors.length} colors</span>
+            )}
+          </div>
+
+          <div className="vehicle-price">
+            {price} <span className="price-note">Ex-showroom (approx.)</span>
+          </div>
 
           <div className="vehicle-highlight-row">
-            <div className="vehicle-highlight">
-              <span className="label">Power</span>
-              <span className="value">{powerHighlight}</span>
-            </div>
-
-            <div className="vehicle-highlight">
-              <span className="label">Torque</span>
-              <span className="value">{torqueHighlight}</span>
-            </div>
-
-            <div className="vehicle-highlight">
-              <span className="label">Mileage</span>
-              <span className="value">{mileage}</span>
-            </div>
-
-            <div className="vehicle-highlight">
-              <span className="label">Tank</span>
-              <span className="value">{tank}</span>
-            </div>
+            {hasValue(d.power) && (
+              <div className="vehicle-highlight">
+                <span className="label">Power</span>
+                <span className="value">{text(d.power)} bhp</span>
+              </div>
+            )}
+            {hasValue(d.torque) && (
+              <div className="vehicle-highlight">
+                <span className="label">Torque</span>
+                <span className="value">{text(d.torque)} Nm</span>
+              </div>
+            )}
+            {hasValue(d.mileage) && (
+              <div className="vehicle-highlight">
+                <span className="label">Mileage</span>
+                <span className="value">{unit(d.mileage, "kmpl")}</span>
+              </div>
+            )}
           </div>
         </div>
 
         <div className="vehicle-hero-image">
           <img
-            src={imgSrc}
-            alt={`${s(v.brand)} ${s(v.model)}`.trim() || "Vehicle image"}
+            src={v.imageUrl || FALLBACK_IMG}
+            alt={title}
             className="vehicle-hero-img"
+            loading="lazy"
             onError={(e) => {
               (e.currentTarget as HTMLImageElement).src = FALLBACK_IMG;
             }}
@@ -181,155 +210,134 @@ export function VehicleDetailsPage() {
       </div>
 
       <div className="vehicle-spec-grid">
-        <section className="spec-card">
-          <h2>Engine &amp; Performance</h2>
-          <dl>
-            <div className="spec-row">
-              <dt>Engine type</dt>
-              <dd>{text(v.engineType)}</dd>
-            </div>
-            <div className="spec-row">
-              <dt>Specification</dt>
-              <dd className="break-anywhere">{text(v.specification)}</dd>
-            </div>
-            <div className="spec-row">
-              <dt>Induction</dt>
-              <dd>{text(v.inductionType)}</dd>
-            </div>
-            <div className="spec-row">
-              <dt>Power</dt>
-              <dd>{powerDetail}</dd>
-            </div>
-            <div className="spec-row">
-              <dt>Torque</dt>
-              <dd>{torqueDetail}</dd>
-            </div>
-            <div className="spec-row">
-              <dt>Emission</dt>
-              <dd>{text(v.emission)}</dd>
-            </div>
-            <div className="spec-row">
-              <dt>Mileage</dt>
-              <dd>{mileage}</dd>
-            </div>
-
-            {isBike && (n(v.range) ?? 0) > 0 && (
-              <div className="spec-row">
-                <dt>Range</dt>
-                <dd>{range}</dd>
-              </div>
-            )}
-          </dl>
-        </section>
-
-        <section className="spec-card">
-          <h2>Dimensions &amp; Weight</h2>
-          <dl>
-            <div className="spec-row">
-              <dt>Length</dt>
-              <dd>{length}</dd>
-            </div>
-            <div className="spec-row">
-              <dt>Width</dt>
-              <dd>{width}</dd>
-            </div>
-            <div className="spec-row">
-              <dt>Height</dt>
-              <dd>{height}</dd>
-            </div>
-            <div className="spec-row">
-              <dt>Wheelbase</dt>
-              <dd>{wheelbase}</dd>
-            </div>
-            <div className="spec-row">
-              <dt>Ground clearance</dt>
-              <dd>{groundClearance}</dd>
-            </div>
-            <div className="spec-row">
-              <dt>Kerb weight</dt>
-              <dd>{weight}</dd>
-            </div>
-          </dl>
-        </section>
-
-        {isCar && (
+        {hasValue(d.description) && (
           <section className="spec-card">
-            <h2>Capacity &amp; Layout</h2>
+            <h2>About</h2>
+            <p className="vehicle-description">{text(d.description)}</p>
+          </section>
+        )}
+
+        {(hasValue(d.engineType) ||
+          hasValue(d.inductionType) ||
+          hasValue(d.emission) ||
+          hasValue(d.range)) && (
+          <section className="spec-card">
+            <h2>Engine</h2>
             <dl>
-              <div className="spec-row">
-                <dt>Seating</dt>
-                <dd>{seating}</dd>
-              </div>
-              <div className="spec-row">
-                <dt>Rows</dt>
-                <dd>{v.rows ?? "—"}</dd>
-              </div>
-              <div className="spec-row">
-                <dt>Doors</dt>
-                <dd>{v.doors ?? "—"}</dd>
-              </div>
-              <div className="spec-row">
-                <dt>Boot space</dt>
-                <dd>{boot}</dd>
-              </div>
+              <Spec label="Engine type" value={text(d.engineType)} />
+              <Spec label="Induction" value={text(d.inductionType)} />
+              <Spec label="Emission" value={text(d.emission)} />
+              <Spec label="Range" value={unit(d.range, "km")} />
             </dl>
           </section>
         )}
 
-        <section className="spec-card">
-          <h2>Tyres, Brakes &amp; Steering</h2>
-          <dl>
-            <div className="spec-row">
-              <dt>Front type</dt>
-              <dd>{text(v.frontType)}</dd>
-            </div>
-            <div className="spec-row">
-              <dt>Back type</dt>
-              <dd>{text(v.backType)}</dd>
-            </div>
-            <div className="spec-row">
-              <dt>Front brake</dt>
-              <dd>{text(v.frontBrake)}</dd>
-            </div>
-            <div className="spec-row">
-              <dt>Rear brake</dt>
-              <dd>{text(v.backBrake)}</dd>
-            </div>
-            <div className="spec-row">
-              <dt>Tyre size (front)</dt>
-              <dd>{text(v.tyreSizeFront)}</dd>
-            </div>
-            <div className="spec-row">
-              <dt>Tyre size (rear)</dt>
-              <dd>{text(v.tyreSizeBack)}</dd>
-            </div>
-            <div className="spec-row">
-              <dt>Tyre type</dt>
-              <dd>{text(v.tyreType)}</dd>
-            </div>
-            <div className="spec-row">
-              <dt>Wheel material</dt>
-              <dd>{text(v.wheelMaterial)}</dd>
-            </div>
+        {(hasValue(d.power) ||
+          hasValue(d.torque) ||
+          hasValue(d.warrantyYears) ||
+          hasValue(d.serviceIntervalKm)) && (
+          <section className="spec-card">
+            <h2>Performance</h2>
+            <dl>
+              <Spec
+                label="Power"
+                value={powerText(d.power ?? null, d.powerRpm ?? null)}
+              />
+              <Spec
+                label="Torque"
+                value={torqueText(d.torque ?? null, d.torqueRpm ?? null)}
+              />
+              <Spec
+                label="Warranty"
+                value={
+                  hasValue(d.warrantyYears)
+                    ? `${d.warrantyYears} years`
+                    : "—"
+                }
+              />
+              <Spec
+                label="Service interval"
+                value={unit(d.serviceIntervalKm, "km")}
+              />
+            </dl>
+          </section>
+        )}
 
-            {isCar && (
-              <div className="spec-row">
-                <dt>Spare</dt>
-                <dd>{text(v.spare)}</dd>
-              </div>
-            )}
+        {(hasValue(d.length) ||
+          hasValue(d.width) ||
+          hasValue(d.height) ||
+          hasValue(d.weight) ||
+          hasValue(d.wheelBase) ||
+          hasValue(d.groundClearance)) && (
+          <section className="spec-card">
+            <h2>Dimensions & Weight</h2>
+            <dl>
+              <Spec label="Length" value={unit(d.length, "mm")} />
+              <Spec label="Width" value={unit(d.width, "mm")} />
+              <Spec label="Height" value={unit(d.height, "mm")} />
+              <Spec label="Wheelbase" value={unit(d.wheelBase, "mm")} />
+              <Spec
+                label="Ground clearance"
+                value={unit(d.groundClearance, "mm")}
+              />
+              <Spec label="Weight" value={unit(d.weight, "kg")} />
+            </dl>
+          </section>
+        )}
 
-            {isCar && (
-              <div className="spec-row">
-                <dt>Power steering</dt>
-                <dd>{text(v.poweredSteering)}</dd>
-              </div>
-            )}
-          </dl>
-        </section>
+        {(hasValue(d.personCapacity) ||
+          hasValue(d.rows) ||
+          hasValue(d.doors) ||
+          hasValue(d.bootSpace) ||
+          hasValue(d.tankSize)) && (
+          <section className="spec-card">
+            <h2>Capacity</h2>
+            <dl>
+              <Spec label="Seating" value={text(d.personCapacity)} />
+              <Spec label="Rows" value={text(d.rows)} />
+              <Spec label="Doors" value={text(d.doors)} />
+              <Spec label="Boot space" value={unit(d.bootSpace, "L")} />
+              <Spec label="Tank size" value={unit(d.tankSize, "L")} />
+            </dl>
+          </section>
+        )}
+
+        {(hasValue(d.frontType) ||
+          hasValue(d.backType) ||
+          hasValue(d.frontBrake) ||
+          hasValue(d.backBrake) ||
+          hasValue(d.tyreType) ||
+          hasValue(d.wheelMaterial)) && (
+          <section className="spec-card">
+            <h2>Tyres & Brakes</h2>
+            <dl>
+              <Spec label="Front type" value={text(d.frontType)} />
+              <Spec label="Rear type" value={text(d.backType)} />
+              <Spec label="Front brake" value={text(d.frontBrake)} />
+              <Spec label="Rear brake" value={text(d.backBrake)} />
+              <Spec label="Tyre type" value={text(d.tyreType)} />
+              <Spec label="Wheel material" value={text(d.wheelMaterial)} />
+              <Spec label="Spare" value={text(d.spare)} />
+            </dl>
+          </section>
+        )}
       </div>
 
       <Footer />
+    </div>
+  );
+}
+
+/* =======================
+   Spec row
+======================= */
+
+function Spec({ label, value }: { label: string; value: string }) {
+  if (value === "—") return null;
+  return (
+    <div className="spec-row">
+      <dt>{label}</dt>
+      <dd>{value}</dd>
     </div>
   );
 }
