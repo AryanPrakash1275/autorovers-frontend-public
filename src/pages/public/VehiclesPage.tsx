@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
-import type { VehicleListItem } from "../features/vehicles/types";
-import { getPublicVehicles } from "../features/vehicles/api";
-import { Footer } from "./Footer";
+import type { VehicleListItem } from "../../features/vehicles/types";
+import { getPublicVehicles } from "../../features/vehicles/api";
+import { Footer } from "../../shared/ui/Footer";
 
 const BIKE_CATEGORIES = new Set([
   "Sport",

@@ -4,9 +4,9 @@ import { Link, useParams } from "react-router-dom";
 import type {
   VehicleWithDetailsDto,
   VehicleDetailsDto,
-} from "../features/vehicles/types";
-import { getPublicVehicleBySlug } from "../features/vehicles/api";
-import { Footer } from "./Footer";
+} from "../../features/vehicles/types";
+import { getPublicVehicleBySlug } from "../../features/vehicles/api";
+import { Footer } from "../../shared/ui/Footer";
 
 type MaybeError = { message?: string };
 

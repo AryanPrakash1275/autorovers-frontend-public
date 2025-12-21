@@ -1,4 +1,4 @@
-import { Footer } from "../../../public/Footer";
+import { Footer } from "../../../shared/ui/Footer.tsx";
 import type { VehicleListItem } from "../types";
 import type { SortDir, SortKey } from "./vehicleListUtils.ts";
 

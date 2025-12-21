@@ -148,6 +148,7 @@ export type Vehicle = {
  */
 export type VehicleListItem = {
   id: number;
+  vehicleType?: VehicleType | string;
   brand?: string;
   model?: string;
   variant?: string;

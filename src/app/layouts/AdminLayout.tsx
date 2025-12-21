@@ -1,6 +1,6 @@
 import { Outlet, useNavigate, Link } from "react-router-dom";
 import { clearToken } from "../../features/auth/storage";
-import { Logo } from "../../public/Logo";
+import { Logo } from "../../shared/ui/Logo";
 
 // Shared layout shell for admin routes (header + outlet).
 export function AdminLayout() {
