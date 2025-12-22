@@ -8,6 +8,7 @@ import { VehiclesPage } from "./pages/public/VehiclesPage";
 import { VehicleDetailsPage } from "./pages/public/VehicleDetailsPage";
 import { LoginPage } from "./pages/admin/LoginPage";
 import { VehicleListPage } from "./features/vehicles/components/VehicleListPage";
+import { ComparePage } from "./features/vehicles/pages/ComparePage";
 
 export default function App() {
   return (
@@ -17,6 +18,9 @@ export default function App() {
         <Route path="/" element={<VehiclesPage />} />
         <Route path="/vehicles" element={<VehiclesPage />} />
         <Route path="/vehicles/:slug" element={<VehicleDetailsPage />} />
+
+        {/* ✅ Comparison (public, read-only) */}
+        <Route path="/compare" element={<ComparePage />} />
       </Route>
 
       {/* Auth */}

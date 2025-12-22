@@ -7,11 +7,74 @@ import type {
   VehicleVariantDto,
 } from "./types";
 
-// ADMIN endpoints
 const ADMIN_VEHICLES_PATH = "/api/AdminVehicles";
-
-// PUBLIC endpoints
 const PUBLIC_VEHICLES_PATH = "/api/Vehicles";
+
+// ✅ matches backend CreateVehicleRequest (only what we need now)
+export type CreateVehicleRequest = {
+  brand: string;
+  model: string;
+  variant?: string | null;
+  year: number;
+  price: number;
+  description?: string | null;
+
+  category: string;
+  transmission: string;
+  slug?: string | null;
+  imageUrl?: string | null;
+
+  vehicleType?: string | null;
+
+  engine?: {
+    engineType?: string | null;
+    engineDisplacement?: number | null;
+    inductionType?: string | null;
+    emission?: string | null;
+    power?: number | null;
+    powerRpm?: number | null;
+    torque?: number | null;
+    torqueRpm?: number | null;
+    mileage?: number | null;
+    range?: number | null;
+    fuelType?: string | null; // 🔥 REQUIRED for powertrain derive (ICE)
+  };
+
+  dimensions?: {
+    length?: number | null;
+    width?: number | null;
+    height?: number | null;
+    wheelBase?: number | null;
+    groundClearance?: number | null;
+    weight?: number | null;
+  };
+
+  dynamics?: {
+    frontType?: string | null;
+    backType?: string | null;
+    frontBrake?: string | null;
+    backBrake?: string | null;
+    tyreSizeFront?: string | null;
+    tyreSizeBack?: string | null;
+    tyreType?: string | null;
+    wheelMaterial?: string | null;
+  };
+
+  bike?: {
+    tankSize?: number | null;
+  };
+
+  car?: {
+    personCapacity?: number | null;
+    rows?: number | null;
+    doors?: number | null;
+    bootSpace?: number | null;
+  };
+
+  colorsAvailableJson?: string | null;
+  warrantyYears?: number | null;
+  serviceIntervalKm?: number | null;
+};
 
 // ===== ADMIN LIST =====
 export async function getVehicles(): Promise<VehicleListItem[]> {
@@ -23,8 +86,9 @@ export async function getVehicle(id: number): Promise<Vehicle> {
   return apiGet<Vehicle>(`${ADMIN_VEHICLES_PATH}/${id}`);
 }
 
-export async function createVehicle(payload: Vehicle): Promise<{ id: number }> {
-  return apiPost<Vehicle, { id: number }>(ADMIN_VEHICLES_PATH, payload);
+// ✅ create expects CreateVehicleRequest (not Vehicle)
+export async function createVehicle(payload: CreateVehicleRequest): Promise<{ id: number }> {
+  return apiPost<CreateVehicleRequest, { id: number }>(ADMIN_VEHICLES_PATH, payload);
 }
 
 export async function updateVehicle(id: number, payload: Vehicle): Promise<void> {
@@ -40,10 +104,7 @@ export function getVehicleWithDetails(id: number): Promise<VehicleWithDetailsDto
   return apiGet<VehicleWithDetailsDto>(`${ADMIN_VEHICLES_PATH}/${id}/details`);
 }
 
-export function updateVehicleDetails(
-  id: number,
-  payload: VehicleDetailsDto
-): Promise<void> {
+export function updateVehicleDetails(id: number, payload: VehicleDetailsDto): Promise<void> {
   return apiPut<VehicleDetailsDto, void>(`${ADMIN_VEHICLES_PATH}/${id}/details`, payload);
 }
 
@@ -53,28 +114,20 @@ export async function getPublicVehicles(): Promise<VehicleListItem[]> {
 }
 
 // ===== PUBLIC DETAILS =====
-export async function getPublicVehicleBySlug(
-  slug: string
-): Promise<VehicleWithDetailsDto> {
+export async function getPublicVehicleBySlug(slug: string): Promise<VehicleWithDetailsDto> {
   return apiGet<VehicleWithDetailsDto>(
     `${PUBLIC_VEHICLES_PATH}/slug/${encodeURIComponent(slug)}`
   );
 }
 
-// ===============================
-// Admin Variants API (uses same client wrappers)
-// ===============================
+// Variants...
 export async function getAdminVariants(vehicleId: number): Promise<VehicleVariantDto[]> {
   return apiGet<VehicleVariantDto[]>(`/api/Admin/Vehicles/${vehicleId}/variants`);
 }
 
 export async function updateAdminVariant(
   variantId: number,
-  payload: {
-    exShowroomPrice?: number;
-    isDefault?: boolean;
-    isActive?: boolean;
-  }
+  payload: { exShowroomPrice?: number; isDefault?: boolean; isActive?: boolean }
 ): Promise<void> {
   return apiPut<typeof payload, void>(`/api/Admin/Variants/${variantId}`, payload);
 }

@@ -1,14 +1,21 @@
-import { useState, useMemo } from "react";
+// src/features/vehicles/components/VehicleListPage.tsx
+// FULL FILE (your version + Compare CTA bar)
+
+import { useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useVehicles } from "../hooks/useVehicles";
-import { VehicleTable } from "./VehicleTable";
 import type { Vehicle, VehicleListItem } from "../types";
+
+import { VehicleTable } from "./VehicleTable";
 import { VehicleForm } from "./VehicleForm";
+
 import {
   createVehicle,
   updateVehicle,
   deleteVehicleById,
   getVehicleWithDetails,
   updateVehicleDetails,
+  type CreateVehicleRequest,
 } from "../api";
 
 import {
@@ -24,12 +31,100 @@ import {
 } from "./vehicleListUtils";
 
 import { mapFullVehicleToForm } from "./vehicleMapper";
+import { loadCompare, toggleCompare } from "../compareState";
+
+/* =========================
+   Helpers
+   ========================= */
 
 function toMessage(err: unknown, fallback: string) {
   return err instanceof Error ? err.message : fallback;
 }
 
+function sOrNull(v?: string) {
+  const t = (v ?? "").trim();
+  return t.length ? t : null;
+}
+
+function nOrNull(v?: number) {
+  return typeof v === "number" && Number.isFinite(v) && v !== 0 ? v : null;
+}
+
+function hasSlug(row: VehicleListItem): boolean {
+  return typeof row.slug === "string" && row.slug.trim().length > 0;
+}
+
+function buildCreateReq(data: Vehicle): CreateVehicleRequest {
+  return {
+    brand: data.brand,
+    model: data.model,
+    variant: sOrNull(data.variant),
+    year: data.year,
+    price: data.price,
+    description: sOrNull(data.description),
+
+    category: data.category,
+    transmission: data.transmission,
+    slug: sOrNull(data.slug),
+    imageUrl: sOrNull(data.imageUrl),
+    vehicleType: sOrNull(String(data.vehicleType ?? "")),
+
+    // 🔥 critical for powertrain derive (backend reads r.Engine.FuelType or r.Ev)
+    engine: {
+      engineType: sOrNull(data.engineType),
+      engineDisplacement: nOrNull(data.engineDisplacement),
+      inductionType: sOrNull(data.inductionType),
+      emission: sOrNull(data.emission),
+      power: nOrNull(data.power),
+      powerRpm: nOrNull(data.powerRpm),
+      torque: nOrNull(data.torque),
+      torqueRpm: nOrNull(data.torqueRpm),
+      mileage: nOrNull(data.mileage),
+      range: nOrNull(data.range),
+      fuelType: sOrNull(data.fuelType), // ✅ REQUIRED
+    },
+
+    dimensions: {
+      length: nOrNull(data.length),
+      width: nOrNull(data.width),
+      height: nOrNull(data.height),
+      wheelBase: nOrNull(data.wheelBase),
+      groundClearance: nOrNull(data.groundClearance),
+      weight: nOrNull(data.weight),
+    },
+
+    dynamics: {
+      frontType: sOrNull(data.frontType),
+      backType: sOrNull(data.backType),
+      frontBrake: sOrNull(data.frontBrake),
+      backBrake: sOrNull(data.backBrake),
+      tyreSizeFront: sOrNull(data.tyreSizeFront),
+      tyreSizeBack: sOrNull(data.tyreSizeBack),
+      tyreType: sOrNull(data.tyreType),
+      wheelMaterial: sOrNull(data.wheelMaterial),
+    },
+
+    bike: { tankSize: nOrNull(data.tankSize) },
+
+    car: {
+      personCapacity: nOrNull(data.personCapacity),
+      rows: nOrNull(data.rows),
+      doors: nOrNull(data.doors),
+      bootSpace: nOrNull(data.bootSpace),
+    },
+
+    colorsAvailableJson: sOrNull(data.colorsAvailableJson),
+    warrantyYears: nOrNull(data.warrantyYears),
+    serviceIntervalKm: nOrNull(data.serviceIntervalKm),
+  };
+}
+
+/* =========================
+   Component
+   ========================= */
+
 export function VehicleListPage() {
+  const navigate = useNavigate();
   const { vehicles, loading, error, reload } = useVehicles();
 
   const [query, setQuery] = useState("");
@@ -48,26 +143,24 @@ export function VehicleListPage() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [editLoading, setEditLoading] = useState(false);
 
+  // ✅ Compare state
+  const [compare, setCompare] = useState(loadCompare());
+
   const handleSortChange = (key: SortKey) => {
     setSortBy((prevSortBy) => {
       setSortDir((prevSortDir) => {
-        if (prevSortBy === key) {
-          return prevSortDir === "asc" ? "desc" : "asc";
-        }
+        if (prevSortBy === key) return prevSortDir === "asc" ? "desc" : "asc";
         return "asc";
       });
-
       return key;
     });
   };
 
   const brandOptions = useMemo(() => buildBrandOptions(vehicles), [vehicles]);
-
   const transmissionOptions = useMemo(
     () => buildTransmissionOptions(vehicles),
     [vehicles]
   );
-
   const yearOptions = useMemo(() => buildYearOptions(vehicles), [vehicles]);
 
   const visibleVehicles = useMemo(() => {
@@ -135,16 +228,38 @@ export function VehicleListPage() {
     setEditing(null);
   }
 
+  function onToggleCompare(row: VehicleListItem) {
+    // ✅ hard rule: compare requires slug (ComparePage fetches by slug)
+    if (!hasSlug(row)) {
+      setActionError("This vehicle cannot be compared (missing slug).");
+      return;
+    }
+
+    // if your list API doesn't return vehicleType, compare won't be able to lock
+    if (!row.vehicleType || String(row.vehicleType).trim().length === 0) {
+      setActionError("Cannot compare: vehicleType is missing on this row.");
+      return;
+    }
+
+    const next = toggleCompare(compare, row);
+    setCompare(next);
+  }
+
   async function handleSubmit(data: Vehicle) {
     try {
       setActionError(null);
 
       if (mode === "create") {
-        await createVehicle(data);
+        // 🔥 Required for backend powertrain derive
+        if (!data.fuelType || data.fuelType.trim().length === 0) {
+          setActionError("Fuel type is required (e.g., Petrol / Diesel / Electric).");
+          return;
+        }
+
+        await createVehicle(buildCreateReq(data));
       } else if (mode === "edit" && editing?.id) {
         await updateVehicle(editing.id, data);
 
-        // ✅ NESTED DETAILS PAYLOAD (matches backend)
         await updateVehicleDetails(editing.id, {
           description: data.description,
           colorsAvailableJson: data.colorsAvailableJson,
@@ -224,7 +339,12 @@ export function VehicleListPage() {
   }
 
   if (loading) return <p style={{ padding: "2rem" }}>Loading...</p>;
-  if (error) return <p style={{ padding: "2rem", color: "red" }}>Error: {error}</p>;
+  if (error)
+    return (
+      <p style={{ padding: "2rem", color: "red" }}>
+        Error: {error}
+      </p>
+    );
 
   return (
     <div className="admin-main">
@@ -233,6 +353,7 @@ export function VehicleListPage() {
           <h1 className="page-title">Vehicles</h1>
           <p className="page-subtitle">Search, sort and manage Autorovers vehicle catalog.</p>
         </div>
+
         <button className="btn" onClick={openCreate}>
           + Add Vehicle
         </button>
@@ -312,6 +433,38 @@ export function VehicleListPage() {
 
       {actionError && <div className="alert alert-error">{actionError}</div>}
 
+      {/* ✅ Compare CTA bar */}
+      {compare.items.length >= 2 && (
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            padding: "12px 16px",
+            marginBottom: 12,
+            borderRadius: 10,
+            background: "#0f172a",
+            color: "white",
+          }}
+        >
+          <div style={{ fontWeight: 600 }}>
+            {compare.items.length} vehicles selected for comparison
+          </div>
+
+          <button
+            className="btn"
+            style={{
+              background: "white",
+              color: "#0f172a",
+              fontWeight: 700,
+            }}
+            onClick={() => navigate("/compare")}
+          >
+            Compare →
+          </button>
+        </div>
+      )}
+
       {visibleVehicles.length === 0 ? (
         <div
           className="alert"
@@ -341,6 +494,8 @@ export function VehicleListPage() {
           onSortChange={handleSortChange}
           onEdit={openEdit}
           onDelete={handleDelete}
+          compare={compare}
+          onToggleCompare={onToggleCompare}
         />
       )}
 
