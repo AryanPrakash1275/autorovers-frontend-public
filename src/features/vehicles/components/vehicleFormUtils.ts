@@ -1,3 +1,5 @@
+// src/features/vehicles/components/vehicleFormUtils.ts
+
 import type { Vehicle } from "../types";
 import {
   BIKE_CATEGORIES,
@@ -9,11 +11,16 @@ import {
 
 export type VehicleType = "Bike" | "Car" | "";
 
-// Use Sets to avoid `as any` and keep lookups fast
+// -------------------------------
+// Internal Sets (fast lookups)
+// -------------------------------
 const BIKE_CATEGORY_SET = new Set<string>(BIKE_CATEGORIES);
 const CAR_CATEGORY_SET = new Set<string>(CAR_CATEGORIES);
 const POPULAR_BRAND_SET = new Set<string>(POPULAR_BRANDS);
 
+// -------------------------------
+// Numeric fields for form casting
+// -------------------------------
 export const NUMBER_FIELDS = new Set<keyof Vehicle>([
   "year",
   "price",
@@ -36,27 +43,68 @@ export const NUMBER_FIELDS = new Set<keyof Vehicle>([
   "tankSize",
 ]);
 
+// -------------------------------
+// 🔴 FIX #1: Strong inference
+// -------------------------------
 export function inferVehicleTypeFromCategory(
   initial: Vehicle | null | undefined
 ): VehicleType {
   if (!initial) return "";
-  if (initial.vehicleType === "Bike" || initial.vehicleType === "Car")
-    return initial.vehicleType;
 
+  // 1️⃣ Explicit value always wins
+  if (initial.vehicleType === "Bike" || initial.vehicleType === "Car") {
+    return initial.vehicleType;
+  }
+
+  // 2️⃣ Infer from CAR-only fields
+  if (
+    initial.doors ||
+    initial.bootSpace ||
+    initial.personCapacity ||
+    initial.rows
+  ) {
+    return "Car";
+  }
+
+  // 3️⃣ Infer from BIKE-only fields
+  if (initial.tankSize && !initial.doors) {
+    return "Bike";
+  }
+
+  // 4️⃣ Fallback to category
   const cat = initial.category ?? "";
   if (!cat) return "";
 
   if (BIKE_CATEGORY_SET.has(cat)) return "Bike";
   if (CAR_CATEGORY_SET.has(cat)) return "Car";
+
   return "";
 }
 
-export function getCategoryOptions(vehicleType: VehicleType): readonly string[] {
+// -------------------------------
+// 🔴 FIX #2: Normalizer
+// -------------------------------
+export function normalizeVehicleType(
+  value?: string | null
+): VehicleType {
+  if (value === "Bike" || value === "Car") return value;
+  return "";
+}
+
+// -------------------------------
+// Category options
+// -------------------------------
+export function getCategoryOptions(
+  vehicleType: VehicleType
+): readonly string[] {
   if (vehicleType === "Bike") return BIKE_CATEGORIES;
   if (vehicleType === "Car") return CAR_CATEGORIES;
   return [];
 }
 
+// -------------------------------
+// Transmission options
+// -------------------------------
 export function getTransmissionOptions(
   vehicleType: VehicleType
 ): readonly string[] {
@@ -65,6 +113,9 @@ export function getTransmissionOptions(
   return [];
 }
 
+// -------------------------------
+// Brand helpers
+// -------------------------------
 export function initBrandState(initialBrand?: string | null) {
   const brand = (initialBrand ?? "").trim();
   const isPopular = brand ? POPULAR_BRAND_SET.has(brand) : false;
@@ -75,6 +126,12 @@ export function initBrandState(initialBrand?: string | null) {
   };
 }
 
-export function getFinalBrand(selectedBrand: string, customBrand: string) {
-  return (selectedBrand === "Other" ? customBrand.trim() : selectedBrand).trim();
+export function getFinalBrand(
+  selectedBrand: string,
+  customBrand: string
+) {
+  return (selectedBrand === "Other"
+    ? customBrand.trim()
+    : selectedBrand
+  ).trim();
 }

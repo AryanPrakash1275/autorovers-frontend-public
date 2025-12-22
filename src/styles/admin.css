@@ -464,3 +464,73 @@ canvas {
     padding: 0.75rem;
   }
 }
+
+/* =========================
+   Variants Editor
+========================= */
+.admin-variants {
+  width: 100%;
+}
+
+.admin-variants-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.variants-table {
+  border: 1px solid rgba(0,0,0,0.08);
+  border-radius: 10px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.variants-row {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr 0.7fr 0.7fr;
+  gap: 10px;
+  align-items: center;
+  padding: 10px 12px;
+  border-top: 1px solid rgba(0,0,0,0.06);
+}
+
+.variants-row:first-child {
+  border-top: 0;
+}
+
+.variants-head {
+  font-size: 12px;
+  font-weight: 600;
+  opacity: 0.75;
+  background: rgba(0,0,0,0.03);
+}
+
+.variants-name {
+  font-weight: 600;
+}
+
+.variants-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.variants-input {
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(0,0,0,0.12);
+  background: #fff;
+  outline: none;
+}
+
+.variants-input:focus {
+  border-color: rgba(0,0,0,0.25);
+}
+
+.variants-row.is-dirty {
+  background: rgba(255, 200, 0, 0.08);
+}
+

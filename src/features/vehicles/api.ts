@@ -4,6 +4,7 @@ import type {
   VehicleListItem,
   VehicleDetailsDto,
   VehicleWithDetailsDto,
+  VehicleVariantDto,
 } from "./types";
 
 // ADMIN endpoints
@@ -27,7 +28,7 @@ export async function createVehicle(payload: Vehicle): Promise<{ id: number }> {
 }
 
 export async function updateVehicle(id: number, payload: Vehicle): Promise<void> {
-  return apiPut<Vehicle>(`${ADMIN_VEHICLES_PATH}/${id}`, payload);
+  return apiPut<Vehicle, void>(`${ADMIN_VEHICLES_PATH}/${id}`, payload);
 }
 
 export async function deleteVehicleById(id: number): Promise<void> {
@@ -43,10 +44,7 @@ export function updateVehicleDetails(
   id: number,
   payload: VehicleDetailsDto
 ): Promise<void> {
-  return apiPut<VehicleDetailsDto, void>(
-    `${ADMIN_VEHICLES_PATH}/${id}/details`,
-    payload
-  );
+  return apiPut<VehicleDetailsDto, void>(`${ADMIN_VEHICLES_PATH}/${id}/details`, payload);
 }
 
 // ===== PUBLIC LIST =====
@@ -55,10 +53,28 @@ export async function getPublicVehicles(): Promise<VehicleListItem[]> {
 }
 
 // ===== PUBLIC DETAILS =====
-export async function getPublicVehicleBySlug(slug: string): Promise<VehicleWithDetailsDto> {
+export async function getPublicVehicleBySlug(
+  slug: string
+): Promise<VehicleWithDetailsDto> {
   return apiGet<VehicleWithDetailsDto>(
     `${PUBLIC_VEHICLES_PATH}/slug/${encodeURIComponent(slug)}`
   );
 }
 
+// ===============================
+// Admin Variants API (uses same client wrappers)
+// ===============================
+export async function getAdminVariants(vehicleId: number): Promise<VehicleVariantDto[]> {
+  return apiGet<VehicleVariantDto[]>(`/api/Admin/Vehicles/${vehicleId}/variants`);
+}
 
+export async function updateAdminVariant(
+  variantId: number,
+  payload: {
+    exShowroomPrice?: number;
+    isDefault?: boolean;
+    isActive?: boolean;
+  }
+): Promise<void> {
+  return apiPut<typeof payload, void>(`/api/Admin/Variants/${variantId}`, payload);
+}

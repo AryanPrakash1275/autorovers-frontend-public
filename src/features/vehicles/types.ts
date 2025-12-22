@@ -16,6 +16,7 @@ export type VehicleVariantDto = {
   name: string;
   price: number;
   isDefault: boolean;
+  isActive?: boolean;
   addons: VariantAddonDto[];
 };
 
@@ -88,7 +89,7 @@ export type VehicleDetailsDto = Partial<{
   warrantyYears: number;
   serviceIntervalKm: number;
 
-  // ✅ nested (new/possible backend shape)
+  // ✅ nested (backend shape)
   engine: EngineSpecsDto;
   dimensions: DimensionsSpecsDto;
   dynamics: DynamicsSpecsDto;
@@ -188,6 +189,8 @@ export type Vehicle = {
   serviceIntervalKm?: number;
 
   engineType?: string;
+  engineDisplacement?: number; // ✅ NEW (for backend nested engine)
+  fuelType?: string; // ✅ NEW (for backend nested engine)
   specification?: string;
   inductionType?: string;
   power?: number;
@@ -226,7 +229,6 @@ export type Vehicle = {
 
 /**
  * Public list cards (what your VehiclesPage uses).
- * Keep this lightweight. Add only what the list endpoint returns.
  */
 export type VehicleListItem = {
   id: number;
@@ -241,7 +243,6 @@ export type VehicleListItem = {
   slug?: string;
   imageUrl?: string;
 
-  // optional highlights if list endpoint includes them
   power?: number;
   torque?: number;
 };

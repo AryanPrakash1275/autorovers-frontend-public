@@ -32,20 +32,16 @@ function toMessage(err: unknown, fallback: string) {
 export function VehicleListPage() {
   const { vehicles, loading, error, reload } = useVehicles();
 
-  // Search (brand/model/variant/slug)
   const [query, setQuery] = useState("");
 
-  // Sort
   const [sortBy, setSortBy] = useState<SortKey>("brand");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
 
-  // Filters
   const [typeFilter, setTypeFilter] = useState<VehicleTypeFilter>("all");
   const [brandFilter, setBrandFilter] = useState<string>("all");
   const [transFilter, setTransFilter] = useState<string>("all");
   const [yearFilter, setYearFilter] = useState<string>("all");
 
-  // Panel
   const [isPanelOpen, setIsPanelOpen] = useState(false);
   const [mode, setMode] = useState<"create" | "edit">("create");
   const [editing, setEditing] = useState<Vehicle | null>(null);
@@ -65,7 +61,6 @@ export function VehicleListPage() {
     });
   };
 
-  // Build filter option lists from data (client-side)
   const brandOptions = useMemo(() => buildBrandOptions(vehicles), [vehicles]);
 
   const transmissionOptions = useMemo(
@@ -149,41 +144,63 @@ export function VehicleListPage() {
       } else if (mode === "edit" && editing?.id) {
         await updateVehicle(editing.id, data);
 
+        // ✅ NESTED DETAILS PAYLOAD (matches backend)
         await updateVehicleDetails(editing.id, {
-          engineType: data.engineType,
-          specification: data.specification,
-          inductionType: data.inductionType,
-          power: data.power,
-          powerRpm: data.powerRpm,
-          torque: data.torque,
-          torqueRpm: data.torqueRpm,
-          emission: data.emission,
-          mileage: data.mileage,
+          description: data.description,
+          colorsAvailableJson: data.colorsAvailableJson,
+          warrantyYears: data.warrantyYears,
+          serviceIntervalKm: data.serviceIntervalKm,
+
+          engine: {
+            engineType: data.engineType,
+            engineDisplacement: data.engineDisplacement,
+            fuelType: data.fuelType,
+            inductionType: data.inductionType,
+            emission: data.emission,
+            power: data.power,
+            powerRpm: data.powerRpm,
+            torque: data.torque,
+            torqueRpm: data.torqueRpm,
+            mileage: data.mileage,
+            range: data.range,
+          },
+
+          dimensions: {
+            length: data.length,
+            width: data.width,
+            height: data.height,
+            weight: data.weight,
+            groundClearance: data.groundClearance,
+            wheelBase: data.wheelBase,
+          },
+
+          dynamics: {
+            frontType: data.frontType,
+            backType: data.backType,
+            frontBrake: data.frontBrake,
+            backBrake: data.backBrake,
+            tyreSizeFront: data.tyreSizeFront,
+            tyreSizeBack: data.tyreSizeBack,
+            tyreType: data.tyreType,
+            wheelMaterial: data.wheelMaterial,
+          },
+
+          bike: {
+            tankSize: data.tankSize,
+          },
+
+          car: {
+            personCapacity: data.personCapacity,
+            rows: data.rows,
+            doors: data.doors,
+            bootSpace: data.bootSpace,
+          },
+
+          // optional legacy
           autoStartStop: data.autoStartStop,
-          range: data.range,
-
-          length: data.length,
-          width: data.width,
-          height: data.height,
-          groundClearance: data.groundClearance,
-          wheelBase: data.wheelBase,
-
-          personCapacity: data.personCapacity,
-          rows: data.rows,
-          doors: data.doors,
-          bootSpace: data.bootSpace,
-          tankSize: data.tankSize,
-
-          frontType: data.frontType,
-          backType: data.backType,
-          frontBrake: data.frontBrake,
-          backBrake: data.backBrake,
           poweredSteering: data.poweredSteering,
-          tyreSizeFront: data.tyreSizeFront,
-          tyreSizeBack: data.tyreSizeBack,
-          tyreType: data.tyreType,
-          wheelMaterial: data.wheelMaterial,
           spare: data.spare,
+          specification: data.specification,
         });
       }
 
@@ -206,22 +223,15 @@ export function VehicleListPage() {
     }
   }
 
-  if (loading) {
-    return <p style={{ padding: "2rem" }}>Loading...</p>;
-  }
-
-  if (error) {
-    return <p style={{ padding: "2rem", color: "red" }}>Error: {error}</p>;
-  }
+  if (loading) return <p style={{ padding: "2rem" }}>Loading...</p>;
+  if (error) return <p style={{ padding: "2rem", color: "red" }}>Error: {error}</p>;
 
   return (
     <div className="admin-main">
       <div className="page-header">
         <div>
           <h1 className="page-title">Vehicles</h1>
-          <p className="page-subtitle">
-            Search, sort and manage Autorovers vehicle catalog.
-          </p>
+          <p className="page-subtitle">Search, sort and manage Autorovers vehicle catalog.</p>
         </div>
         <button className="btn" onClick={openCreate}>
           + Add Vehicle
