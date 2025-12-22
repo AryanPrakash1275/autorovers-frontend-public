@@ -3,8 +3,81 @@
 export type VehicleType = "Bike" | "Car" | "";
 
 /**
+ * Variant + Addon DTOs (public read)
+ */
+export type VariantAddonDto = {
+  id: number;
+  name: string;
+  price: number;
+};
+
+export type VehicleVariantDto = {
+  id: number;
+  name: string;
+  price: number;
+  isDefault: boolean;
+  addons: VariantAddonDto[];
+};
+
+/**
+ * Nested specs (to support nested backend shape)
+ */
+export type EngineSpecsDto = Partial<{
+  engineType: string;
+  engineDisplacement: number;
+  inductionType: string;
+  emission: string;
+  fuelType: string;
+
+  power: number;
+  powerRpm: number;
+  torque: number;
+  torqueRpm: number;
+
+  mileage: number;
+  range: number;
+}>;
+
+export type DimensionsSpecsDto = Partial<{
+  length: number;
+  width: number;
+  height: number;
+  wheelBase: number;
+  groundClearance: number;
+  weight: number;
+}>;
+
+export type DynamicsSpecsDto = Partial<{
+  frontType: string;
+  backType: string;
+
+  frontBrake: string;
+  backBrake: string;
+
+  tyreSizeFront: string;
+  tyreSizeBack: string;
+  tyreType: string;
+
+  wheelMaterial: string;
+}>;
+
+export type BikeSpecsDto = Partial<{
+  tankSize: number;
+}>;
+
+export type CarSpecsDto = Partial<{
+  personCapacity: number;
+  rows: number;
+  doors: number;
+  bootSpace: number;
+}>;
+
+/**
  * Nested details DTO coming from backend.
  * Keep it partial because backend can omit fields depending on vehicle kind.
+ * Supports BOTH:
+ * - flat fields (engineType, power, length...)
+ * - nested fields (engine.engineType, dimensions.length...)
  */
 export type VehicleDetailsDto = Partial<{
   // About / meta
@@ -15,7 +88,14 @@ export type VehicleDetailsDto = Partial<{
   warrantyYears: number;
   serviceIntervalKm: number;
 
-  // Engine & performance
+  // ✅ nested (new/possible backend shape)
+  engine: EngineSpecsDto;
+  dimensions: DimensionsSpecsDto;
+  dynamics: DynamicsSpecsDto;
+  bike: BikeSpecsDto;
+  car: CarSpecsDto;
+
+  // Engine & performance (flat legacy)
   engineType: string;
   specification: string;
   inductionType: string;
@@ -28,7 +108,7 @@ export type VehicleDetailsDto = Partial<{
   autoStartStop: string;
   range: number;
 
-  // Dimensions & weight
+  // Dimensions & weight (flat legacy)
   length: number;
   width: number;
   height: number;
@@ -36,14 +116,14 @@ export type VehicleDetailsDto = Partial<{
   groundClearance: number;
   wheelBase: number;
 
-  // Capacity
+  // Capacity (flat legacy)
   personCapacity: number;
   rows: number;
   doors: number;
   bootSpace: number;
   tankSize: number;
 
-  // Tyres, brakes & steering
+  // Tyres, brakes & steering (flat legacy)
   frontType: string;
   backType: string;
   frontBrake: string;
@@ -58,7 +138,7 @@ export type VehicleDetailsDto = Partial<{
 
 /**
  * Backend response for /api/Vehicles/slug/{slug}
- * (core vehicle + nested `details`)
+ * (core vehicle + nested `details` + variants)
  */
 export type VehicleWithDetailsDto = {
   id: number;
@@ -76,6 +156,8 @@ export type VehicleWithDetailsDto = {
   imageUrl?: string;
 
   details?: VehicleDetailsDto;
+
+  variants?: VehicleVariantDto[];
 };
 
 /**
