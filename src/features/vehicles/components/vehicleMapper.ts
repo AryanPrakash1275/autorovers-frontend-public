@@ -1,5 +1,16 @@
 import type { Vehicle, VehicleListItem, VehicleWithDetailsDto } from "../types";
 
+type Obj = Record<string, unknown>;
+
+function isObj(v: unknown): v is Obj {
+  return !!v && typeof v === "object";
+}
+
+function get(obj: unknown, key: string): unknown {
+  if (!isObj(obj)) return undefined;
+  return obj[key];
+}
+
 function toNum(v: unknown, fallback = 0): number {
   return typeof v === "number" && Number.isFinite(v) ? v : fallback;
 }
@@ -8,22 +19,22 @@ function toStr(v: unknown, fallback = ""): string {
   return typeof v === "string" ? v : fallback;
 }
 
-function getFlat(details: unknown, key: string): unknown {
-  if (!details || typeof details !== "object") return undefined;
-  return (details as Record<string, unknown>)[key];
+function pick(...vals: unknown[]): unknown {
+  for (const v of vals) if (v !== undefined && v !== null) return v;
+  return undefined;
 }
 
 export function mapFullVehicleToForm(
   full: VehicleWithDetailsDto,
   rowFallback: VehicleListItem
 ): Vehicle {
-  const d = full.details ?? {};
+  const d = isObj(full.details) ? full.details : ({} as Obj);
 
-  const engine = d.engine ?? {};
-  const dimensions = d.dimensions ?? {};
-  const dynamics = d.dynamics ?? {};
-  const bike = d.bike ?? {};
-  const car = d.car ?? {};
+  const engine = get(d, "engine");
+  const dimensions = get(d, "dimensions");
+  const dynamics = get(d, "dynamics");
+  const bike = get(d, "bike");
+  const car = get(d, "car");
 
   return {
     id: full.id ?? rowFallback.id,
@@ -40,61 +51,71 @@ export function mapFullVehicleToForm(
     imageUrl: full.imageUrl ?? rowFallback.imageUrl ?? "",
 
     // About / ownership
-    description: d.description ?? "",
-    colorsAvailableJson: d.colorsAvailableJson ?? "",
-    warrantyYears: d.warrantyYears ?? 0,
-    serviceIntervalKm: d.serviceIntervalKm ?? 0,
-
-    // Engine & performance (prefer nested)
-    engineType: engine.engineType ?? d.engineType ?? "",
-    engineDisplacement: toNum(
-      engine.engineDisplacement ?? getFlat(d, "engineDisplacement"),
+    description: toStr(get(d, "description"), ""),
+    colorsAvailableJson: toStr(get(d, "colorsAvailableJson"), ""),
+    warrantyYears: toNum(pick(get(d, "warrantyYears"), get(full, "warrantyYears")), 0),
+    serviceIntervalKm: toNum(
+      pick(get(d, "serviceIntervalKm"), get(full, "serviceIntervalKm")),
       0
     ),
-    fuelType: toStr(engine.fuelType ?? getFlat(d, "fuelType"), ""),
-    specification: d.specification ?? "",
 
-    inductionType: engine.inductionType ?? d.inductionType ?? "",
-    emission: engine.emission ?? d.emission ?? "",
+    // Engine & performance (prefer nested)
+    engineType: toStr(pick(get(engine, "engineType"), get(d, "engineType")), ""),
+    engineDisplacement: toNum(
+      pick(
+        get(engine, "engineDisplacement"),
+        get(d, "engineDisplacement"),
+        get(full, "engineDisplacement")
+      ),
+      0
+    ),
+    fuelType: toStr(pick(get(engine, "fuelType"), get(d, "fuelType"), get(full, "fuelType")), ""),
+    specification: toStr(get(d, "specification"), ""),
 
-    power: engine.power ?? d.power ?? 0,
-    powerRpm: engine.powerRpm ?? d.powerRpm ?? 0,
-    torque: engine.torque ?? d.torque ?? 0,
-    torqueRpm: engine.torqueRpm ?? d.torqueRpm ?? 0,
+    inductionType: toStr(pick(get(engine, "inductionType"), get(d, "inductionType")), ""),
+    emission: toStr(pick(get(engine, "emission"), get(d, "emission")), ""),
 
-    mileage: engine.mileage ?? d.mileage ?? 0,
-    range: engine.range ?? d.range ?? 0,
-    autoStartStop: d.autoStartStop ?? "",
+    power: toNum(pick(get(engine, "power"), get(d, "power"), get(full, "power")), 0),
+    powerRpm: toNum(pick(get(engine, "powerRpm"), get(d, "powerRpm"), get(full, "powerRpm")), 0),
+    torque: toNum(pick(get(engine, "torque"), get(d, "torque"), get(full, "torque")), 0),
+    torqueRpm: toNum(pick(get(engine, "torqueRpm"), get(d, "torqueRpm"), get(full, "torqueRpm")), 0),
+
+    mileage: toNum(pick(get(engine, "mileage"), get(d, "mileage"), get(full, "mileage")), 0),
+    range: toNum(pick(get(engine, "range"), get(d, "range"), get(full, "range")), 0),
+    autoStartStop: toStr(get(d, "autoStartStop"), ""),
 
     // Dimensions (prefer nested)
-    length: dimensions.length ?? d.length ?? 0,
-    width: dimensions.width ?? d.width ?? 0,
-    height: dimensions.height ?? d.height ?? 0,
-    weight: dimensions.weight ?? d.weight ?? 0,
-    groundClearance: dimensions.groundClearance ?? d.groundClearance ?? 0,
-    wheelBase: dimensions.wheelBase ?? d.wheelBase ?? 0,
+    length: toNum(pick(get(dimensions, "length"), get(d, "length"), get(full, "length")), 0),
+    width: toNum(pick(get(dimensions, "width"), get(d, "width"), get(full, "width")), 0),
+    height: toNum(pick(get(dimensions, "height"), get(d, "height"), get(full, "height")), 0),
+    weight: toNum(pick(get(dimensions, "weight"), get(d, "weight"), get(full, "weight")), 0),
+    groundClearance: toNum(
+      pick(get(dimensions, "groundClearance"), get(d, "groundClearance"), get(full, "groundClearance")),
+      0
+    ),
+    wheelBase: toNum(pick(get(dimensions, "wheelBase"), get(d, "wheelBase"), get(full, "wheelBase")), 0),
 
     // Car capacity (prefer nested)
-    personCapacity: car.personCapacity ?? d.personCapacity ?? 0,
-    rows: car.rows ?? d.rows ?? 0,
-    doors: car.doors ?? d.doors ?? 0,
-    bootSpace: car.bootSpace ?? d.bootSpace ?? 0,
+    personCapacity: toNum(pick(get(car, "personCapacity"), get(d, "personCapacity"), get(full, "personCapacity")), 0),
+    rows: toNum(pick(get(car, "rows"), get(d, "rows"), get(full, "rows")), 0),
+    doors: toNum(pick(get(car, "doors"), get(d, "doors"), get(full, "doors")), 0),
+    bootSpace: toNum(pick(get(car, "bootSpace"), get(d, "bootSpace"), get(full, "bootSpace")), 0),
 
     // Bike capacity (prefer nested)
-    tankSize: bike.tankSize ?? d.tankSize ?? 0,
+    tankSize: toNum(pick(get(bike, "tankSize"), get(d, "tankSize"), get(full, "tankSize")), 0),
 
     // Dynamics (prefer nested)
-    frontType: dynamics.frontType ?? d.frontType ?? "",
-    backType: dynamics.backType ?? d.backType ?? "",
-    frontBrake: dynamics.frontBrake ?? d.frontBrake ?? "",
-    backBrake: dynamics.backBrake ?? d.backBrake ?? "",
-    tyreSizeFront: dynamics.tyreSizeFront ?? d.tyreSizeFront ?? "",
-    tyreSizeBack: dynamics.tyreSizeBack ?? d.tyreSizeBack ?? "",
-    tyreType: dynamics.tyreType ?? d.tyreType ?? "",
-    wheelMaterial: dynamics.wheelMaterial ?? d.wheelMaterial ?? "",
+    frontType: toStr(pick(get(dynamics, "frontType"), get(d, "frontType")), ""),
+    backType: toStr(pick(get(dynamics, "backType"), get(d, "backType")), ""),
+    frontBrake: toStr(pick(get(dynamics, "frontBrake"), get(d, "frontBrake")), ""),
+    backBrake: toStr(pick(get(dynamics, "backBrake"), get(d, "backBrake")), ""),
+    tyreSizeFront: toStr(pick(get(dynamics, "tyreSizeFront"), get(d, "tyreSizeFront")), ""),
+    tyreSizeBack: toStr(pick(get(dynamics, "tyreSizeBack"), get(d, "tyreSizeBack")), ""),
+    tyreType: toStr(pick(get(dynamics, "tyreType"), get(d, "tyreType")), ""),
+    wheelMaterial: toStr(pick(get(dynamics, "wheelMaterial"), get(d, "wheelMaterial")), ""),
 
     // Legacy-only
-    poweredSteering: d.poweredSteering ?? "",
-    spare: d.spare ?? "",
+    poweredSteering: toStr(get(d, "poweredSteering"), ""),
+    spare: toStr(get(d, "spare"), ""),
   };
 }
