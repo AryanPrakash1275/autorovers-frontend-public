@@ -668,3 +668,50 @@ body.public-view {
     font-size: 1rem;
   }
 }
+
+/* --- Variant pills: force readable --- */
+.variant-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.variant-pill {
+  appearance: none;
+  border: 1px solid rgba(0, 0, 0, 0.18);
+  background: #fff;
+  color: #111;              /* <-- force text color */
+  border-radius: 999px;
+  padding: 10px 14px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.variant-pill.is-active {
+  border-color: rgba(0, 0, 0, 0.45);
+  background: #fff;
+  color: #111;              /* <-- keep readable when active */
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.06);
+}
+
+.variant-pill-name,
+.variant-pill-price {
+  color: inherit;           /* <-- inherit forced #111 */
+  font-size: 14px;
+  line-height: 1.1;
+}
+
+.variant-pill-price {
+  opacity: 0.75;
+}
+
+/* Optional: fix badges stuck together */
+.vehicle-features {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+

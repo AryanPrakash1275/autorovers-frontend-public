@@ -7,6 +7,7 @@ import type {
   VehicleWithDetailsDto,
   VehicleDetailsDto,
   VehicleVariantDto,
+  VariantAddonDto,
 } from "../../features/vehicles/types";
 import { getPublicVehicleBySlug } from "../../features/vehicles/api";
 import { Footer } from "../../shared/ui/Footer";
@@ -61,6 +62,12 @@ function parseColors(json?: string | null): string[] {
   }
 }
 
+function sum(nums: number[]): number {
+  let s = 0;
+  for (const n of nums) s += n;
+  return s;
+}
+
 /* =======================
    Component
 ======================= */
@@ -76,6 +83,9 @@ export function VehicleDetailsPage() {
   const [selectedVariantId, setSelectedVariantId] = useState<number | null>(
     null
   );
+
+  // Addon selection hook (even if empty today)
+  const [selectedAddonIds, setSelectedAddonIds] = useState<number[]>([]);
 
   /* =======================
      Derived
@@ -100,9 +110,45 @@ export function VehicleDetailsPage() {
 
   const selectedVariant = useMemo(() => {
     if (!variants.length) return null;
-    if (selectedVariantId == null) return null;
+
+    // If nothing selected yet, pick default (or first)
+    if (selectedVariantId == null) {
+      return variants.find((x) => x.isDefault) ?? variants[0];
+    }
+
     return variants.find((x) => x.id === selectedVariantId) ?? null;
   }, [variants, selectedVariantId]);
+
+  // Ensure state follows derived default once variants appear
+  useEffect(() => {
+    if (!variants.length) return;
+    if (selectedVariantId != null) return;
+
+    const def = variants.find((x) => x.isDefault) ?? variants[0];
+    setSelectedVariantId(def.id);
+  }, [variants, selectedVariantId]);
+
+  // When variant changes, reset addon selection (safe default)
+  useEffect(() => {
+    setSelectedAddonIds([]);
+  }, [selectedVariant?.id]);
+
+  const selectedAddons: VariantAddonDto[] = useMemo(() => {
+    const addons = selectedVariant?.addons ?? [];
+    if (!addons.length) return [];
+    const set = new Set(selectedAddonIds);
+    return addons.filter((a) => set.has(a.id));
+  }, [selectedVariant?.addons, selectedAddonIds]);
+
+  const addonsTotal = useMemo(
+    () => sum(selectedAddons.map((a) => a.price ?? 0)),
+    [selectedAddons]
+  );
+
+  const baseVariantPrice = selectedVariant?.price ?? 0;
+  const finalPriceNumber =
+    (baseVariantPrice > 0 ? baseVariantPrice : vehicle?.price ?? 0) +
+    (addonsTotal > 0 ? addonsTotal : 0);
 
   // Resolve BOTH flat OR nested details
   const d = details;
@@ -151,11 +197,9 @@ export function VehicleDetailsPage() {
   }, [vehicle, selectedVariant]);
 
   const displayPrice = useMemo(() => {
-    // Prefer variant price; fallback to vehicle.price
-    if (selectedVariant?.price && selectedVariant.price > 0)
-      return formatINR(selectedVariant.price);
-    return formatINR(vehicle?.price);
-  }, [selectedVariant, vehicle?.price]);
+    if (!finalPriceNumber || finalPriceNumber <= 0) return "—";
+    return formatINR(finalPriceNumber);
+  }, [finalPriceNumber]);
 
   /* =======================
      Data Fetch
@@ -180,7 +224,7 @@ export function VehicleDetailsPage() {
 
         setVehicle(data);
 
-        // Auto-select default variant (or first)
+        // Select default variant (or first)
         const list = data.variants ?? [];
         if (list.length > 0) {
           const def = list.find((x) => x.isDefault) ?? list[0];
@@ -210,6 +254,8 @@ export function VehicleDetailsPage() {
   if (!vehicle) return <div className="public-page">Vehicle not found.</div>;
 
   const v = vehicle;
+
+  const hasVariants = variants.length > 0;
 
   /* =======================
      Render
@@ -249,27 +295,40 @@ export function VehicleDetailsPage() {
             )}
           </div>
 
-          {variants.length > 0 && (
+          {/* ✅ PUBLIC Variant Selector (Pills) */}
+          {hasVariants && (
             <div className="vehicle-variant-picker">
-              <label className="label" htmlFor="variant">
-                Variant
-              </label>
-              <select
-                id="variant"
-                className="input"
-                value={selectedVariantId ?? ""}
-                onChange={(e) => {
-                  const next = Number(e.target.value);
-                  setSelectedVariantId(Number.isFinite(next) ? next : null);
-                }}
+              <div className="label">Variant</div>
+
+              <div
+                className="variant-pills"
+                role="radiogroup"
+                aria-label="Select variant"
               >
-                {variants.map((x) => (
-                  <option key={x.id} value={x.id}>
-                    {x.name}
-                    {x.isDefault ? " (Default)" : ""} — {formatINR(x.price)}
-                  </option>
-                ))}
-              </select>
+                {variants.map((x) => {
+                  const active = selectedVariant?.id === x.id;
+                  return (
+                    <button
+                      key={x.id}
+                      type="button"
+                      className={`variant-pill ${active ? "is-active" : ""}`}
+                      role="radio"
+                      aria-checked={active}
+                      onClick={() => setSelectedVariantId(x.id)}
+                    >
+                      <span className="variant-pill-name">{x.name}</span>
+                      <span className="variant-pill-price">
+                        {formatINR(x.price)}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* optional helper line (can remove anytime) */}
+              <div className="variant-hint">
+                {selectedVariant?.isDefault ? "Default variant selected" : ""}
+              </div>
             </div>
           )}
 
@@ -278,17 +337,40 @@ export function VehicleDetailsPage() {
             <span className="price-note">Ex-showroom (approx.)</span>
           </div>
 
+          {/* ✅ Add-on hook (renders only if addons exist) */}
           {selectedVariant && selectedVariant.addons?.length > 0 && (
             <div className="vehicle-addons">
               <div className="addons-title">Add-ons</div>
+
               <ul className="addons-list">
-                {selectedVariant.addons.map((a) => (
-                  <li key={a.id} className="addons-item">
-                    <span className="addons-name">{a.name}</span>
-                    <span className="addons-price">{formatINR(a.price)}</span>
-                  </li>
-                ))}
+                {selectedVariant.addons.map((a) => {
+                  const checked = selectedAddonIds.includes(a.id);
+                  return (
+                    <li key={a.id} className="addons-item">
+                      <label className="addons-check">
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={(e) => {
+                            const next = e.target.checked;
+                            setSelectedAddonIds((prev) => {
+                              if (next) return [...prev, a.id];
+                              return prev.filter((id) => id !== a.id);
+                            });
+                          }}
+                        />
+                        <span className="addons-name">{a.name}</span>
+                      </label>
+
+                      <span className="addons-price">{formatINR(a.price)}</span>
+                    </li>
+                  );
+                })}
               </ul>
+
+              <div className="addons-total">
+                Add-ons total: <strong>{formatINR(addonsTotal)}</strong>
+              </div>
             </div>
           )}
 
@@ -357,13 +439,24 @@ export function VehicleDetailsPage() {
           <section className="spec-card">
             <h2>Performance</h2>
             <dl>
-              <Spec label="Power" value={powerText(power ?? null, powerRpm ?? null)} />
-              <Spec label="Torque" value={torqueText(torque ?? null, torqueRpm ?? null)} />
+              <Spec
+                label="Power"
+                value={powerText(power ?? null, powerRpm ?? null)}
+              />
+              <Spec
+                label="Torque"
+                value={torqueText(torque ?? null, torqueRpm ?? null)}
+              />
               <Spec
                 label="Warranty"
-                value={hasValue(d.warrantyYears) ? `${d.warrantyYears} years` : "—"}
+                value={
+                  hasValue(d.warrantyYears) ? `${d.warrantyYears} years` : "—"
+                }
               />
-              <Spec label="Service interval" value={unit(d.serviceIntervalKm, "km")} />
+              <Spec
+                label="Service interval"
+                value={unit(d.serviceIntervalKm, "km")}
+              />
             </dl>
           </section>
         )}
@@ -381,7 +474,10 @@ export function VehicleDetailsPage() {
               <Spec label="Width" value={unit(width, "mm")} />
               <Spec label="Height" value={unit(height, "mm")} />
               <Spec label="Wheelbase" value={unit(wheelBase, "mm")} />
-              <Spec label="Ground clearance" value={unit(groundClearance, "mm")} />
+              <Spec
+                label="Ground clearance"
+                value={unit(groundClearance, "mm")}
+              />
               <Spec label="Weight" value={unit(weight, "kg")} />
             </dl>
           </section>

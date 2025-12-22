@@ -198,7 +198,7 @@ export function VehiclesPage() {
 
             const priceText =
               typeof v.price === "number" && v.price > 0
-                ? `₹ ${v.price.toLocaleString("en-IN")}`
+                ? `Starting from ₹ ${v.price.toLocaleString("en-IN")}`
                 : "Price unavailable";
 
             const title = `${safeStr(v.brand)} ${safeStr(v.model)}`.trim() || "Vehicle";
