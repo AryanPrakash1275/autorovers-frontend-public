@@ -1,5 +1,5 @@
 // src/features/vehicles/components/VehicleListPage.tsx
-// FULL FILE (your version + Compare CTA bar)
+// FULL FILE (your version + Compare CTA bar) — FIXED updateVehicleDetails payload
 
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -69,7 +69,7 @@ function buildCreateReq(data: Vehicle): CreateVehicleRequest {
     imageUrl: sOrNull(data.imageUrl),
     vehicleType: sOrNull(String(data.vehicleType ?? "")),
 
-    // 🔥 critical for powertrain derive (backend reads r.Engine.FuelType or r.Ev)
+    // backend derives powertrain from r.Ev or r.Engine
     engine: {
       engineType: sOrNull(data.engineType),
       engineDisplacement: nOrNull(data.engineDisplacement),
@@ -81,7 +81,7 @@ function buildCreateReq(data: Vehicle): CreateVehicleRequest {
       torqueRpm: nOrNull(data.torqueRpm),
       mileage: nOrNull(data.mileage),
       range: nOrNull(data.range),
-      fuelType: sOrNull(data.fuelType), // ✅ REQUIRED
+      fuelType: sOrNull(data.fuelType),
     },
 
     dimensions: {
@@ -229,13 +229,11 @@ export function VehicleListPage() {
   }
 
   function onToggleCompare(row: VehicleListItem) {
-    // ✅ hard rule: compare requires slug (ComparePage fetches by slug)
     if (!hasSlug(row)) {
       setActionError("This vehicle cannot be compared (missing slug).");
       return;
     }
 
-    // if your list API doesn't return vehicleType, compare won't be able to lock
     if (!row.vehicleType || String(row.vehicleType).trim().length === 0) {
       setActionError("Cannot compare: vehicleType is missing on this row.");
       return;
@@ -250,7 +248,6 @@ export function VehicleListPage() {
       setActionError(null);
 
       if (mode === "create") {
-        // 🔥 Required for backend powertrain derive
         if (!data.fuelType || data.fuelType.trim().length === 0) {
           setActionError("Fuel type is required (e.g., Petrol / Diesel / Electric).");
           return;
@@ -260,6 +257,7 @@ export function VehicleListPage() {
       } else if (mode === "edit" && editing?.id) {
         await updateVehicle(editing.id, data);
 
+        // ✅ ONLY send fields your backend accepts (nested DTO)
         await updateVehicleDetails(editing.id, {
           description: data.description,
           colorsAvailableJson: data.colorsAvailableJson,
@@ -310,12 +308,6 @@ export function VehicleListPage() {
             doors: data.doors,
             bootSpace: data.bootSpace,
           },
-
-          // optional legacy
-          autoStartStop: data.autoStartStop,
-          poweredSteering: data.poweredSteering,
-          spare: data.spare,
-          specification: data.specification,
         });
       }
 
@@ -351,7 +343,9 @@ export function VehicleListPage() {
       <div className="page-header">
         <div>
           <h1 className="page-title">Vehicles</h1>
-          <p className="page-subtitle">Search, sort and manage Autorovers vehicle catalog.</p>
+          <p className="page-subtitle">
+            Search, sort and manage Autorovers vehicle catalog.
+          </p>
         </div>
 
         <button className="btn" onClick={openCreate}>

@@ -6,116 +6,32 @@ import {
   COMMON_FIELDS,
   BIKE_FIELDS,
   CAR_FIELDS,
-  type ComparisonField,
+  type VehicleKind,
 } from "../comparisonFields";
 import { getPublicVehicleBySlug } from "../api";
 import type { VehicleWithDetailsDto } from "../types";
 
-type Obj = Record<string, unknown>;
-
-function isObj(v: unknown): v is Obj {
-  return !!v && typeof v === "object";
-}
-
-function get(obj: unknown, key: string): unknown {
-  if (!isObj(obj)) return undefined;
-  return obj[key];
-}
-
-function getStr(obj: unknown, key: string): string | undefined {
-  const v = get(obj, key);
-  return typeof v === "string" && v.trim().length ? v : undefined;
-}
-
-function getNum(obj: unknown, key: string): number | undefined {
-  const v = get(obj, key);
-  return typeof v === "number" && Number.isFinite(v) ? v : undefined;
-}
-
-function renderValue(v: unknown): string {
-  if (v === null || v === undefined) return "—";
-  if (typeof v === "number") return Number.isFinite(v) ? String(v) : "—";
-  if (typeof v === "boolean") return v ? "Yes" : "No";
-  if (typeof v === "string") return v.trim().length ? v : "—";
-  return String(v);
-}
-
-function label(field: ComparisonField): string {
-  switch (field) {
-    case "price":
-      return "Price (₹)";
-    case "power":
-      return "Power";
-    case "torque":
-      return "Torque";
-    case "mileage":
-      return "Mileage";
-    case "range":
-      return "Range";
-    case "transmission":
-      return "Transmission";
-    case "warrantyYears":
-      return "Warranty (years)";
-    case "serviceIntervalKm":
-      return "Service interval (km)";
-    case "weight":
-      return "Kerb weight";
-    case "tankSize":
-      return "Tank size";
-    case "bootSpace":
-      return "Boot space";
-    default:
-      return field;
-  }
-}
-
-function toComparable(dto: VehicleWithDetailsDto): Obj {
-  const out: Obj = {};
-  const d = isObj(dto.details) ? dto.details : {};
-
-  const engine = isObj(d.engine) ? d.engine : {};
-  const dims = isObj(d.dimensions) ? d.dimensions : {};
-  const bike = isObj(d.bike) ? d.bike : {};
-  const car = isObj(d.car) ? d.car : {};
-
-  // header
-  out.id = dto.id;
-  out.brand = dto.brand;
-  out.model = dto.model;
-  out.variant = dto.variant;
-  out.vehicleType = dto.vehicleType;
-  out.imageUrl = dto.imageUrl;
-
-  // common
-  out.price = dto.price ?? 0;
-  out.transmission = dto.transmission;
-  out.warrantyYears = d.warrantyYears;
-  out.serviceIntervalKm = d.serviceIntervalKm;
-
-  out.power = engine.power;
-  out.torque = engine.torque;
-  out.mileage = engine.mileage;
-  out.range = engine.range;
-
-  // bike-only
-  out.weight = dims.weight;
-  out.tankSize = bike.tankSize;
-
-  // car-only
-  out.bootSpace = car.bootSpace;
-
-  return out;
-}
-
 const FALLBACK_IMG =
   "https://dummyimage.com/120x80/cccccc/000000&text=No+Image";
+
+function dash(v?: string) {
+  return v && v.trim().length ? v : "—";
+}
+
+function normalizeKind(v: unknown): VehicleKind | undefined {
+  if (typeof v !== "string") return undefined;
+  const s = v.trim();
+  return s === "Bike" || s === "Car" ? s : undefined;
+}
 
 export function ComparePage() {
   const compare = loadCompare();
 
   const [loading, setLoading] = useState(true);
-  const [rows, setRows] = useState<Obj[]>([]);
-  const [vehicleType, setVehicleType] = useState<string | undefined>(undefined);
+  const [dtos, setDtos] = useState<VehicleWithDetailsDto[]>([]);
+  const [vehicleType, setVehicleType] = useState<VehicleKind | undefined>(
+    undefined
+  );
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
@@ -128,35 +44,39 @@ export function ComparePage() {
 
         if (compare.items.length < 2) {
           if (!cancelled) {
-            setRows([]);
+            setDtos([]);
             setVehicleType(undefined);
             setLoading(false);
           }
           return;
         }
 
-        const dtos = await Promise.all(
-          compare.items
-            .map((x) => x.slug)
-            .filter((s): s is string => typeof s === "string" && s.trim().length > 0)
-            .map((slug) => getPublicVehicleBySlug(slug))
+        const slugs = compare.items
+          .map((x) => x.slug)
+          .filter(
+            (s): s is string => typeof s === "string" && s.trim().length > 0
+          );
+
+        const loaded = await Promise.all(
+          slugs.map((slug) => getPublicVehicleBySlug(slug))
         );
 
-        const comps = dtos.map(toComparable);
+        const firstType = normalizeKind(
+          loaded.find((x) => x.vehicleType)?.vehicleType
+        );
 
-        const lockedType = getStr(comps[0], "vehicleType");
-        const cleaned = lockedType
-          ? comps.filter((r) => getStr(r, "vehicleType") === lockedType)
-          : comps;
+        const cleaned = firstType
+          ? loaded.filter((x) => normalizeKind(x.vehicleType) === firstType)
+          : loaded;
 
         if (!cancelled) {
-          setRows(cleaned);
-          setVehicleType(lockedType);
+          setDtos(cleaned);
+          setVehicleType(firstType);
           setLoading(false);
         }
 
-        if (lockedType && cleaned.length !== comps.length) {
-          const keepIds = new Set(cleaned.map((r) => getNum(r, "id")));
+        if (firstType && cleaned.length !== loaded.length) {
+          const keepIds = new Set(cleaned.map((x) => x.id));
           const nextItems = compare.items.filter((x) => keepIds.has(x.id));
           saveCompare({ items: nextItems });
         }
@@ -176,17 +96,15 @@ export function ComparePage() {
   }, []);
 
   const fields = useMemo(() => {
-    const isBike = vehicleType === "Bike";
-    return [
-      ...COMMON_FIELDS,
-      ...(isBike ? BIKE_FIELDS : CAR_FIELDS),
-    ] as readonly ComparisonField[];
+    if (vehicleType === "Bike") return [...COMMON_FIELDS, ...BIKE_FIELDS];
+    if (vehicleType === "Car") return [...COMMON_FIELDS, ...CAR_FIELDS];
+    return [...COMMON_FIELDS];
   }, [vehicleType]);
 
   if (loading) return <p style={{ padding: "2rem" }}>Loading comparison…</p>;
   if (err) return <p style={{ padding: "2rem", color: "crimson" }}>{err}</p>;
 
-  if (rows.length < 2) {
+  if (dtos.length < 2) {
     return (
       <p style={{ padding: "2rem" }}>
         Select at least 2 vehicles of the same type to compare.
@@ -198,7 +116,7 @@ export function ComparePage() {
     <div style={{ padding: "2rem" }}>
       <h1 style={{ marginBottom: 6 }}>Compare</h1>
       <p className="muted" style={{ marginBottom: 16 }}>
-        Comparing {rows.length} {vehicleType ?? "vehicles"}
+        Comparing {dtos.length} {vehicleType ?? "vehicles"}
       </p>
 
       <div style={{ overflowX: "auto" }}>
@@ -206,14 +124,14 @@ export function ComparePage() {
           <thead>
             <tr>
               <th>Spec</th>
-              {rows.map((v) => {
-                const brand = renderValue(get(v, "brand"));
-                const model = renderValue(get(v, "model"));
-                const variant = renderValue(get(v, "variant"));
-                const img = getStr(v, "imageUrl") ?? FALLBACK_IMG;
+              {dtos.map((v) => {
+                const brand = dash(v.brand);
+                const model = dash(v.model);
+                const variant = dash(v.variant);
+                const img = v.imageUrl?.trim() ? v.imageUrl : FALLBACK_IMG;
 
                 return (
-                  <th key={String(get(v, "id"))}>
+                  <th key={v.id}>
                     <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
                       <img
                         src={img}
@@ -246,12 +164,12 @@ export function ComparePage() {
           </thead>
 
           <tbody>
-            {fields.map((field) => (
-              <tr key={field}>
-                <td style={{ fontWeight: 800 }}>{label(field)}</td>
-                {rows.map((v) => (
-                  <td key={`${String(get(v, "id"))}-${field}`}>
-                    {renderValue(get(v, field))}
+            {fields.map((f) => (
+              <tr key={f.key}>
+                <td style={{ fontWeight: 800 }}>{f.label}</td>
+                {dtos.map((v) => (
+                  <td key={`${v.id}-${f.key}`}>
+                    {(f.format ? f.format(f.get(v)) : String(f.get(v) ?? "—"))}
                   </td>
                 ))}
               </tr>
