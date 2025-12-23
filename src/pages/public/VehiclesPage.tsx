@@ -61,11 +61,16 @@ export function VehiclesPage() {
 
   const [compare, setCompare] = useState(loadCompare());
 
+  /* =========================
+     Compare sync (multi-tab safe)
+     ========================= */
   useEffect(() => {
     const off = onCompareChanged(setCompare);
 
     const onStorage = (e: StorageEvent) => {
-      if (e.key === "autorovers_compare_v1") setCompare(loadCompare());
+      if (e.key === "autorovers_compare_v1") {
+        setCompare(loadCompare());
+      }
     };
 
     window.addEventListener("storage", onStorage);
@@ -75,6 +80,9 @@ export function VehiclesPage() {
     };
   }, []);
 
+  /* =========================
+     Load vehicles
+     ========================= */
   useEffect(() => {
     let alive = true;
 
@@ -98,6 +106,9 @@ export function VehiclesPage() {
     };
   }, []);
 
+  /* =========================
+     Filtering + sorting
+     ========================= */
   const filteredVehicles = useMemo(() => {
     let list = vehicles;
 
@@ -112,9 +123,13 @@ export function VehiclesPage() {
     }
 
     if (category === "bike") {
-      list = list.filter((v) => !!v.category && BIKE_CATEGORIES.has(v.category));
+      list = list.filter(
+        (v) => !!v.category && BIKE_CATEGORIES.has(v.category.trim())
+      );
     } else if (category === "car") {
-      list = list.filter((v) => !!v.category && CAR_CATEGORIES.has(v.category));
+      list = list.filter(
+        (v) => !!v.category && CAR_CATEGORIES.has(v.category.trim())
+      );
     }
 
     const sorted = [...list];
@@ -153,6 +168,16 @@ export function VehiclesPage() {
 
     const next = toggleCompare(loadCompare(), v);
     setCompare(next);
+
+    // Scroll to compare bar when first item is added
+    if (compare.items.length === 0) {
+      setTimeout(() => {
+        document.querySelector(".compare-bar")?.scrollIntoView({
+          behavior: "smooth",
+          block: "end",
+        });
+      }, 0);
+    }
   }
 
   function onClearCompare() {
@@ -168,9 +193,8 @@ export function VehiclesPage() {
   if (error) return <div className="public-page error">{error}</div>;
 
   return (
-    <div
-      className={`public-page ${compareCount ? "has-comparebar" : ""}`}
-    >
+    <div className={`public-page ${compareCount ? "has-comparebar" : ""}`}>
+      {/* ================= HERO ================= */}
       <section className="hero hero-with-image">
         <div className="hero-bg">
           <img src={HERO_IMG} alt="Autorovers hero" className="hero-bg-image" />
@@ -192,6 +216,7 @@ export function VehiclesPage() {
         </div>
       </section>
 
+      {/* ================= CONTROLS ================= */}
       <section className="catalog-section catalog-section--spaced">
         <div className="catalog-controls">
           <input
@@ -225,6 +250,7 @@ export function VehiclesPage() {
         </div>
       </section>
 
+      {/* ================= GRID ================= */}
       <section className="catalog-section">
         <div className="vehicle-grid">
           {filteredVehicles.length === 0 && (
@@ -247,7 +273,8 @@ export function VehiclesPage() {
               `${safeStr(v.brand)} ${safeStr(v.model)}`.trim() || "Vehicle";
 
             const selected = isCompared(v.id);
-            const canCompare = typeof v.slug === "string" && v.slug.trim().length > 0;
+            const canCompare =
+              typeof v.slug === "string" && v.slug.trim().length > 0;
 
             return (
               <Link key={v.id} to={to} className="vehicle-card">
@@ -284,11 +311,16 @@ export function VehiclesPage() {
                 <div style={{ marginTop: 10 }}>
                   <button
                     className={`public-btn ${
-                      selected ? "public-btn--danger" : "public-btn--primary"
+                      selected
+                        ? "public-btn--danger"
+                        : "public-btn--primary"
                     }`}
                     style={{ width: "100%" }}
                     disabled={!canCompare}
-                    onClick={(e) => onToggleCompare(e, v)}
+                    onClick={(e) => {
+                      if (!canCompare) return;
+                      onToggleCompare(e, v);
+                    }}
                     title={
                       canCompare
                         ? selected
@@ -306,17 +338,25 @@ export function VehiclesPage() {
         </div>
       </section>
 
+      {/* ================= COMPARE BAR ================= */}
       {compareCount > 0 && (
         <div className="compare-bar">
-          <div className="compare-bar-left">
-            <div className="compare-bar-title">Compare: {compareCount}/4</div>
+          <div>
+            <div className="compare-bar-title">
+              Compare: {compareCount}/4
+            </div>
             <div className="compare-bar-subtitle">
-              {compare.vehicleType ? `Locked to ${compare.vehicleType}` : "Pick one type"}
+              {compare.vehicleType
+                ? `Locked to ${compare.vehicleType}`
+                : "Pick one type"}
             </div>
           </div>
 
           <div className="compare-bar-actions">
-            <button className="public-btn public-btn--ghost" onClick={onClearCompare}>
+            <button
+              className="public-btn public-btn--ghost"
+              onClick={onClearCompare}
+            >
               Clear
             </button>
             <button
