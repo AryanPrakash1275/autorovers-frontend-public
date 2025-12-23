@@ -1,8 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
 import type { VehicleListItem } from "../../features/vehicles/types";
 import { getPublicVehicles } from "../../features/vehicles/api";
+import {
+  loadCompare,
+  toggleCompare,
+  clearCompare,
+  onCompareChanged,
+} from "../../features/vehicles/compareState";
 import { Footer } from "../../shared/ui/Footer";
 
 const BIKE_CATEGORIES = new Set([
@@ -43,6 +49,8 @@ function safeNum(v: unknown) {
 }
 
 export function VehiclesPage() {
+  const nav = useNavigate();
+
   const [vehicles, setVehicles] = useState<VehicleListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -50,6 +58,22 @@ export function VehiclesPage() {
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState<CategoryFilter>("all");
   const [sortBy, setSortBy] = useState<SortBy>("priceAsc");
+
+  const [compare, setCompare] = useState(loadCompare());
+
+  useEffect(() => {
+    const off = onCompareChanged(setCompare);
+
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === "autorovers_compare_v1") setCompare(loadCompare());
+    };
+
+    window.addEventListener("storage", onStorage);
+    return () => {
+      off();
+      window.removeEventListener("storage", onStorage);
+    };
+  }, []);
 
   useEffect(() => {
     let alive = true;
@@ -117,11 +141,36 @@ export function VehiclesPage() {
     return sorted;
   }, [vehicles, search, category, sortBy]);
 
+  const compareCount = compare.items.length;
+
+  function isCompared(id: number) {
+    return compare.items.some((x) => x.id === id);
+  }
+
+  function onToggleCompare(e: React.MouseEvent, v: VehicleListItem) {
+    e.preventDefault();
+    e.stopPropagation();
+
+    const next = toggleCompare(loadCompare(), v);
+    setCompare(next);
+  }
+
+  function onClearCompare() {
+    const next = clearCompare();
+    setCompare(next);
+  }
+
+  function goCompare() {
+    nav("/compare");
+  }
+
   if (loading) return <div className="public-page">Loading vehicles…</div>;
   if (error) return <div className="public-page error">{error}</div>;
 
   return (
-    <div className="public-page">
+    <div
+      className={`public-page ${compareCount ? "has-comparebar" : ""}`}
+    >
       <section className="hero hero-with-image">
         <div className="hero-bg">
           <img src={HERO_IMG} alt="Autorovers hero" className="hero-bg-image" />
@@ -189,19 +238,16 @@ export function VehiclesPage() {
                 ? `/vehicles/${encodeURIComponent(slug)}`
                 : "/vehicles";
 
-            const powerText =
-              typeof v.power === "number" && v.power > 0 ? `${v.power} bhp` : "—";
-            const torqueText =
-              typeof v.torque === "number" && v.torque > 0
-                ? `${v.torque} Nm`
-                : "—";
-
             const priceText =
               typeof v.price === "number" && v.price > 0
                 ? `Starting from ₹ ${v.price.toLocaleString("en-IN")}`
                 : "Price unavailable";
 
-            const title = `${safeStr(v.brand)} ${safeStr(v.model)}`.trim() || "Vehicle";
+            const title =
+              `${safeStr(v.brand)} ${safeStr(v.model)}`.trim() || "Vehicle";
+
+            const selected = isCompared(v.id);
+            const canCompare = typeof v.slug === "string" && v.slug.trim().length > 0;
 
             return (
               <Link key={v.id} to={to} className="vehicle-card">
@@ -218,32 +264,71 @@ export function VehiclesPage() {
 
                 <div className="vehicle-card-header">
                   <h2 className="vehicle-card-title">{title}</h2>
-                  <p className="vehicle-card-variant">{safeStr(v.variant) || "—"}</p>
+                  <p className="vehicle-card-variant">
+                    {safeStr(v.variant) || "—"}
+                  </p>
                 </div>
 
                 <div className="vehicle-card-specs">
-                  <span className="vehicle-card-spec">
-                    {powerText} · {torqueText}
-                  </span>
                   <span className="vehicle-card-price">{priceText}</span>
                 </div>
 
                 <div className="vehicle-card-footer">
-                  <span className="vehicle-card-tag">
-                    {v.year ?? "—"}
-                  </span>
-                  <span className="vehicle-card-tag">
-                    {v.category ?? "—"}
-                  </span>
+                  <span className="vehicle-card-tag">{v.year ?? "—"}</span>
+                  <span className="vehicle-card-tag">{v.category ?? "—"}</span>
                   <span className="vehicle-card-tag">
                     {v.transmission ?? "—"}
                   </span>
+                </div>
+
+                <div style={{ marginTop: 10 }}>
+                  <button
+                    className={`public-btn ${
+                      selected ? "public-btn--danger" : "public-btn--primary"
+                    }`}
+                    style={{ width: "100%" }}
+                    disabled={!canCompare}
+                    onClick={(e) => onToggleCompare(e, v)}
+                    title={
+                      canCompare
+                        ? selected
+                          ? "Remove from compare"
+                          : "Add to compare"
+                        : "Missing slug (cannot compare)"
+                    }
+                  >
+                    {selected ? "Remove from Compare" : "Add to Compare"}
+                  </button>
                 </div>
               </Link>
             );
           })}
         </div>
       </section>
+
+      {compareCount > 0 && (
+        <div className="compare-bar">
+          <div className="compare-bar-left">
+            <div className="compare-bar-title">Compare: {compareCount}/4</div>
+            <div className="compare-bar-subtitle">
+              {compare.vehicleType ? `Locked to ${compare.vehicleType}` : "Pick one type"}
+            </div>
+          </div>
+
+          <div className="compare-bar-actions">
+            <button className="public-btn public-btn--ghost" onClick={onClearCompare}>
+              Clear
+            </button>
+            <button
+              className="public-btn public-btn--primary"
+              onClick={goCompare}
+              disabled={compareCount < 2}
+            >
+              Compare
+            </button>
+          </div>
+        </div>
+      )}
 
       <Footer />
     </div>

@@ -38,7 +38,6 @@ canvas {
   outline-offset: 2px;
 }
 
-/* Layout */
 body.public-view {
   display: flex;
   justify-content: center;
@@ -83,11 +82,10 @@ body.public-view {
 .public-page {
   max-width: 1200px;
   margin: 0 auto;
-  padding: 2rem 1rem 80px; /* space for fixed footer */
+  padding: 2rem 1rem 80px;
   color: var(--text);
 }
 
-/* Nav */
 .public-nav {
   display: flex;
   align-items: center;
@@ -114,7 +112,6 @@ body.public-view {
   font-weight: 600;
 }
 
-/* Typography */
 .public-title {
   font-size: 2rem;
   font-weight: 700;
@@ -128,7 +125,6 @@ body.public-view {
   margin-bottom: 1.5rem;
 }
 
-/* Catalog controls */
 .catalog-controls {
   display: flex;
   gap: 1rem;
@@ -173,7 +169,6 @@ body.public-view {
   grid-column: 1 / -1;
 }
 
-/* Catalog grid & cards */
 .vehicle-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
@@ -275,7 +270,6 @@ body.public-view {
   color: var(--text-muted);
 }
 
-/* Vehicle details */
 .public-topbar {
   margin-bottom: 1.5rem;
 }
@@ -414,7 +408,6 @@ body.public-view {
   text-align: right;
 }
 
-/* Hero */
 .hero {
   position: relative;
   width: 100%;
@@ -489,7 +482,6 @@ body.public-view {
   max-width: 480px;
 }
 
-/* Login */
 .login-page {
   min-height: 100vh;
   display: flex;
@@ -549,7 +541,6 @@ body.public-view {
   margin-bottom: 0.9rem;
 }
 
-/* Logo */
 .logo {
   display: inline-flex;
   align-items: baseline;
@@ -595,7 +586,6 @@ body.public-view {
   font-size: 1rem;
 }
 
-/* Utilities */
 .break-anywhere {
   overflow-wrap: anywhere;
   word-break: break-word;
@@ -605,7 +595,6 @@ body.public-view {
   color: var(--danger, #dc2626);
 }
 
-/* Footer */
 .public-footer {
   position: fixed;
   bottom: 0;
@@ -621,7 +610,6 @@ body.public-view {
   z-index: 20;
 }
 
-/* Responsive */
 @media (max-width: 640px) {
   .public-header {
     padding: 0.6rem 1rem;
@@ -669,7 +657,6 @@ body.public-view {
   }
 }
 
-/* --- Variant pills: force readable --- */
 .variant-pills {
   display: flex;
   flex-wrap: wrap;
@@ -681,7 +668,7 @@ body.public-view {
   appearance: none;
   border: 1px solid rgba(0, 0, 0, 0.18);
   background: #fff;
-  color: #111;              /* <-- force text color */
+  color: #111;
   border-radius: 999px;
   padding: 10px 14px;
   cursor: pointer;
@@ -693,13 +680,13 @@ body.public-view {
 .variant-pill.is-active {
   border-color: rgba(0, 0, 0, 0.45);
   background: #fff;
-  color: #111;              /* <-- keep readable when active */
+  color: #111;
   box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.06);
 }
 
 .variant-pill-name,
 .variant-pill-price {
-  color: inherit;           /* <-- inherit forced #111 */
+  color: inherit;
   font-size: 14px;
   line-height: 1.1;
 }
@@ -708,10 +695,97 @@ body.public-view {
   opacity: 0.75;
 }
 
-/* Optional: fix badges stuck together */
 .vehicle-features {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
 }
+.public-page.has-comparebar {
+  padding-bottom: 110px;
+}
 
+.public-btn {
+  appearance: none;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  color: var(--text);
+  border-radius: 10px;
+  padding: 0.55rem 0.9rem;
+  font-size: 0.9rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: 0.15s ease;
+  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.06);
+}
+
+.public-btn:hover {
+  transform: translateY(-1px);
+  border-color: rgba(37, 99, 235, 0.35);
+}
+
+.public-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.public-btn--primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.public-btn--primary:hover {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+}
+
+.public-btn--danger {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: #fff;
+}
+
+.public-btn--danger:hover {
+  background: #b91c1c;
+  border-color: #b91c1c;
+}
+
+.public-btn--ghost {
+  background: rgba(255, 255, 255, 0.9);
+  color: var(--text);
+}
+
+.compare-bar {
+  position: fixed;
+  left: 16px;
+  right: 16px;
+  bottom: 16px;
+  z-index: 50;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: 14px;
+  padding: 12px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  box-shadow: 0 14px 28px rgba(0, 0, 0, 0.12);
+  backdrop-filter: blur(10px);
+}
+
+.compare-bar-title {
+  font-weight: 900;
+}
+
+.compare-bar-subtitle {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.compare-bar-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
