@@ -24,8 +24,17 @@ function normalizeKind(v: unknown): VehicleKind | undefined {
   return s === "Bike" || s === "Car" ? s : undefined;
 }
 
+function safeCell(v: unknown): string {
+  if (v === null || v === undefined) return "—";
+  if (typeof v === "boolean") return v ? "✓" : "—";
+  if (typeof v === "number") return Number.isFinite(v) ? String(v) : "—";
+  if (typeof v === "string") return v.trim().length ? v : "—";
+  return String(v);
+}
+
 export function ComparePage() {
-  const compare = loadCompare();
+  // ✅ keep compare state reactive (so unselect/select updates without refresh)
+  const [compare, setCompare] = useState(loadCompare());
 
   const [loading, setLoading] = useState(true);
   const [dtos, setDtos] = useState<VehicleWithDetailsDto[]>([]);
@@ -33,6 +42,23 @@ export function ComparePage() {
     undefined
   );
   const [err, setErr] = useState<string | null>(null);
+
+  // ✅ whenever localStorage compare changes (list page toggles), refresh compare here
+  useEffect(() => {
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === "autorovers_compare_v1") setCompare(loadCompare());
+    };
+    window.addEventListener("storage", onStorage);
+
+    // also refresh on focus (same-tab updates won't fire "storage")
+    const onFocus = () => setCompare(loadCompare());
+    window.addEventListener("focus", onFocus);
+
+    return () => {
+      window.removeEventListener("storage", onStorage);
+      window.removeEventListener("focus", onFocus);
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -75,10 +101,12 @@ export function ComparePage() {
           setLoading(false);
         }
 
+        // ✅ keep localStorage consistent if mixed types somehow got in
         if (firstType && cleaned.length !== loaded.length) {
           const keepIds = new Set(cleaned.map((x) => x.id));
           const nextItems = compare.items.filter((x) => keepIds.has(x.id));
           saveCompare({ items: nextItems });
+          setCompare({ items: nextItems, vehicleType: firstType });
         }
       } catch (e: unknown) {
         if (!cancelled) {
@@ -92,8 +120,7 @@ export function ComparePage() {
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [compare.items]);
 
   const fields = useMemo(() => {
     if (vehicleType === "Bike") return [...COMMON_FIELDS, ...BIKE_FIELDS];
@@ -132,7 +159,9 @@ export function ComparePage() {
 
                 return (
                   <th key={v.id}>
-                    <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                    <div
+                      style={{ display: "flex", gap: 10, alignItems: "center" }}
+                    >
                       <img
                         src={img}
                         alt={`${brand} ${model}`}
@@ -167,11 +196,11 @@ export function ComparePage() {
             {fields.map((f) => (
               <tr key={f.key}>
                 <td style={{ fontWeight: 800 }}>{f.label}</td>
-                {dtos.map((v) => (
-                  <td key={`${v.id}-${f.key}`}>
-                    {(f.format ? f.format(f.get(v)) : String(f.get(v) ?? "—"))}
-                  </td>
-                ))}
+                {dtos.map((v) => {
+                  const raw = f.get(v);
+                  const cell = f.format ? f.format(raw) : safeCell(raw);
+                  return <td key={`${v.id}-${f.key}`}>{cell}</td>;
+                })}
               </tr>
             ))}
           </tbody>

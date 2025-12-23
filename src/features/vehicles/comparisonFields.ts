@@ -4,8 +4,26 @@ import type { VehicleWithDetailsDto } from "./types";
 
 export type VehicleKind = "Bike" | "Car";
 
+export type ComparisonKey =
+  | "price"
+  | "power"
+  | "torque"
+  | "mileage"
+  | "range"
+  | "transmission"
+  | "warrantyYears"
+  | "serviceIntervalKm"
+  | "weight"
+  | "tankSize"
+  | "abs"
+  | "tractionControl"
+  | "bootSpace"
+  | "airbags"
+  | "rearViewCamera"
+  | "parkingSensors";
+
 export type ComparisonField = {
-  key: string;
+  key: ComparisonKey;
   label: string;
   get: (dto: VehicleWithDetailsDto) => unknown;
   format?: (v: unknown) => string;
