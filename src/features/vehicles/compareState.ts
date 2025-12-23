@@ -3,6 +3,7 @@
 import type { VehicleListItem } from "./types";
 
 const KEY = "autorovers_compare_v1";
+const EVENT_NAME = "autorovers:compare_changed";
 
 export type CompareState = {
   vehicleType?: string; // "Bike" | "Car"
@@ -15,7 +16,10 @@ function readString(v: unknown): string | undefined {
   return typeof v === "string" && v.trim().length ? v.trim() : undefined;
 }
 
-// ✅ Case-insensitive category inference
+/* =========================
+   Category → Type inference
+   ========================= */
+
 const CAR_CATEGORIES = new Set(
   [
     "suv",
@@ -61,18 +65,20 @@ function inferTypeFromCategory(category?: string): string | undefined {
   if (CAR_CATEGORIES.has(lc)) return "Car";
   if (BIKE_CATEGORIES.has(lc)) return "Bike";
 
-  // fallback heuristic (safe)
+  // fallback heuristic
   if (lc.includes("suv") || lc.includes("hatch") || lc.includes("sedan")) return "Car";
   if (lc.includes("bike") || lc.includes("scooter") || lc.includes("cruiser")) return "Bike";
 
   return undefined;
 }
 
-// Exported so VehicleTable / ListPage can use the SAME logic
+/* =========================
+   Public helpers
+   ========================= */
+
 export function getCompareVehicleType(row: VehicleListItem): string | undefined {
   const o = row as unknown as Obj;
 
-  // preferred keys (if backend ever starts returning them)
   const vt = readString(o["vehicleType"]);
   if (vt) return vt;
 
@@ -82,7 +88,6 @@ export function getCompareVehicleType(row: VehicleListItem): string | undefined 
   const type = readString(o["type"]);
   if (type) return type;
 
-  // infer from category (your current reality)
   const cat = readString(o["category"]);
   return inferTypeFromCategory(cat);
 }
@@ -110,9 +115,29 @@ export function loadCompare(): CompareState {
 
 export function saveCompare(state: CompareState) {
   localStorage.setItem(KEY, JSON.stringify(state));
+
+  // ✅ same-tab reactivity
+  window.dispatchEvent(
+    new CustomEvent(EVENT_NAME, { detail: state })
+  );
 }
 
-export function toggleCompare(state: CompareState, vehicle: VehicleListItem): CompareState {
+export function onCompareChanged(
+  cb: (state: CompareState) => void
+): () => void {
+  const handler = (e: Event) => {
+    const ce = e as CustomEvent<CompareState>;
+    cb(ce.detail ?? loadCompare());
+  };
+
+  window.addEventListener(EVENT_NAME, handler);
+  return () => window.removeEventListener(EVENT_NAME, handler);
+}
+
+export function toggleCompare(
+  state: CompareState,
+  vehicle: VehicleListItem
+): CompareState {
   const exists = state.items.some((v) => v.id === vehicle.id);
 
   // remove
@@ -130,23 +155,18 @@ export function toggleCompare(state: CompareState, vehicle: VehicleListItem): Co
   if (state.items.length >= 4) return state;
 
   const incomingType = getCompareVehicleType(vehicle);
-
-  // If list row can't be typed even after inference, block.
   if (!incomingType) return state;
 
-  // if empty, lock to incoming type
   if (state.items.length === 0) {
     const next: CompareState = { vehicleType: incomingType, items: [vehicle] };
     saveCompare(next);
     return next;
   }
 
-  // otherwise enforce locked type
   const lockedType =
-    state.vehicleType ?? (state.items[0] ? getCompareVehicleType(state.items[0]) : undefined);
+    state.vehicleType ?? getCompareVehicleType(state.items[0]);
 
-  if (!lockedType) return state;
-  if (incomingType !== lockedType) return state;
+  if (!lockedType || incomingType !== lockedType) return state;
 
   const next: CompareState = {
     vehicleType: lockedType,

@@ -1,7 +1,11 @@
 // src/features/vehicles/pages/ComparePage.tsx
 
 import { useEffect, useMemo, useState } from "react";
-import { loadCompare, saveCompare } from "../compareState";
+import {
+  loadCompare,
+  saveCompare,
+  onCompareChanged,
+} from "../compareState";
 import {
   COMMON_FIELDS,
   BIKE_FIELDS,
@@ -33,32 +37,36 @@ function safeCell(v: unknown): string {
 }
 
 export function ComparePage() {
-  // ✅ keep compare state reactive (so unselect/select updates without refresh)
   const [compare, setCompare] = useState(loadCompare());
 
   const [loading, setLoading] = useState(true);
   const [dtos, setDtos] = useState<VehicleWithDetailsDto[]>([]);
-  const [vehicleType, setVehicleType] = useState<VehicleKind | undefined>(
-    undefined
-  );
+  const [vehicleType, setVehicleType] = useState<VehicleKind | undefined>();
   const [err, setErr] = useState<string | null>(null);
 
-  // ✅ whenever localStorage compare changes (list page toggles), refresh compare here
+  /* =========================
+     Reactivity (same + multi tab)
+     ========================= */
+
   useEffect(() => {
+    const off = onCompareChanged(setCompare);
+
     const onStorage = (e: StorageEvent) => {
-      if (e.key === "autorovers_compare_v1") setCompare(loadCompare());
+      if (e.key === "autorovers_compare_v1") {
+        setCompare(loadCompare());
+      }
     };
+
     window.addEventListener("storage", onStorage);
-
-    // also refresh on focus (same-tab updates won't fire "storage")
-    const onFocus = () => setCompare(loadCompare());
-    window.addEventListener("focus", onFocus);
-
     return () => {
+      off();
       window.removeEventListener("storage", onStorage);
-      window.removeEventListener("focus", onFocus);
     };
   }, []);
+
+  /* =========================
+     Load vehicles
+     ========================= */
 
   useEffect(() => {
     let cancelled = false;
@@ -69,11 +77,9 @@ export function ComparePage() {
         setErr(null);
 
         if (compare.items.length < 2) {
-          if (!cancelled) {
-            setDtos([]);
-            setVehicleType(undefined);
-            setLoading(false);
-          }
+          setDtos([]);
+          setVehicleType(undefined);
+          setLoading(false);
           return;
         }
 
@@ -95,18 +101,19 @@ export function ComparePage() {
           ? loaded.filter((x) => normalizeKind(x.vehicleType) === firstType)
           : loaded;
 
-        if (!cancelled) {
-          setDtos(cleaned);
-          setVehicleType(firstType);
-          setLoading(false);
-        }
+        if (cancelled) return;
 
-        // ✅ keep localStorage consistent if mixed types somehow got in
+        setDtos(cleaned);
+        setVehicleType(firstType);
+        setLoading(false);
+
+        // keep localStorage consistent if mixed types slipped in
         if (firstType && cleaned.length !== loaded.length) {
           const keepIds = new Set(cleaned.map((x) => x.id));
           const nextItems = compare.items.filter((x) => keepIds.has(x.id));
-          saveCompare({ items: nextItems });
-          setCompare({ items: nextItems, vehicleType: firstType });
+          const next = { items: nextItems, vehicleType: firstType };
+          saveCompare(next);
+          setCompare(next);
         }
       } catch (e: unknown) {
         if (!cancelled) {
@@ -127,6 +134,10 @@ export function ComparePage() {
     if (vehicleType === "Car") return [...COMMON_FIELDS, ...CAR_FIELDS];
     return [...COMMON_FIELDS];
   }, [vehicleType]);
+
+  /* =========================
+     Render
+     ========================= */
 
   if (loading) return <p style={{ padding: "2rem" }}>Loading comparison…</p>;
   if (err) return <p style={{ padding: "2rem", color: "crimson" }}>{err}</p>;
@@ -159,9 +170,7 @@ export function ComparePage() {
 
                 return (
                   <th key={v.id}>
-                    <div
-                      style={{ display: "flex", gap: 10, alignItems: "center" }}
-                    >
+                    <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
                       <img
                         src={img}
                         alt={`${brand} ${model}`}
