@@ -789,3 +789,143 @@ body.public-view {
   gap: 10px;
   align-items: center;
 }
+
+/* Compare page */
+.compare-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+
+.compare-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.compare-wrap {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.compare-table {
+  width: 100%;
+  min-width: 980px;
+  border-collapse: separate;
+  border-spacing: 0;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: var(--shadow-soft);
+}
+
+.compare-table th,
+.compare-table td {
+  padding: 12px 12px;
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
+  vertical-align: top;
+  white-space: nowrap;
+}
+
+.compare-table thead th {
+  border-top: 0;
+  background: #f9fafb;
+  position: sticky;
+  top: 0;
+  z-index: 5;
+}
+
+.compare-spec {
+  width: 220px;
+  min-width: 220px;
+  text-align: left;
+}
+
+.compare-spec-cell {
+  font-weight: 800;
+  color: var(--text);
+  background: rgba(2, 6, 23, 0.02);
+}
+
+.compare-col {
+  min-width: 260px;
+}
+
+.compare-vehicle {
+  display: grid;
+  gap: 10px;
+}
+
+.compare-vehicle-top {
+  display: grid;
+  grid-template-columns: 110px 1fr;
+  gap: 12px;
+  align-items: center;
+}
+
+.compare-img {
+  width: 110px;
+  height: 72px;
+  object-fit: cover;
+  border-radius: 12px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: #fff;
+}
+
+.compare-title {
+  display: grid;
+  gap: 2px;
+}
+
+.compare-name {
+  font-weight: 900;
+  color: var(--text);
+  line-height: 1.15;
+}
+
+.compare-variant {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.compare-meta {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.compare-vehicle-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+/* =========================================
+   Compare page — bigger images (override)
+   ========================================= */
+
+.compare-col {
+  min-width: 340px;
+}
+
+.compare-vehicle-top {
+  grid-template-columns: 180px 1fr;
+  gap: 14px;
+}
+
+.compare-img {
+  width: 180px;
+  height: 120px;
+  object-fit: contain; /* better than cover for product-style images */
+  padding: 6px;
+  border-radius: 14px;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  background: #fff;
+}

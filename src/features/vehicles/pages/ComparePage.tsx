@@ -1,7 +1,15 @@
 // src/features/vehicles/pages/ComparePage.tsx
 
 import { useEffect, useMemo, useState } from "react";
-import { loadCompare, saveCompare, onCompareChanged, clearCompare } from "../compareState";
+import { Link, useNavigate } from "react-router-dom";
+
+import {
+  loadCompare,
+  saveCompare,
+  onCompareChanged,
+  clearCompare,
+  type CompareState,
+} from "../compareState";
 import {
   COMMON_FIELDS,
   BIKE_FIELDS,
@@ -12,7 +20,7 @@ import { getPublicVehicleBySlug } from "../api";
 import type { VehicleWithDetailsDto } from "../types";
 
 const FALLBACK_IMG =
-  "https://dummyimage.com/120x80/cccccc/000000&text=No+Image";
+  "https://dummyimage.com/240x160/cccccc/000000&text=No+Image";
 
 function dash(v?: string) {
   return v && v.trim().length ? v : "—";
@@ -26,7 +34,6 @@ function safeCell(v: unknown): string {
   return String(v);
 }
 
-/** Match compareState.ts inference exactly */
 const CAR_CATEGORIES = new Set(
   [
     "suv",
@@ -72,24 +79,31 @@ function inferKindFromCategory(category?: string | null): VehicleKind | undefine
   if (CAR_CATEGORIES.has(lc)) return "Car";
   if (BIKE_CATEGORIES.has(lc)) return "Bike";
 
-  // fallback heuristic (same spirit as compareState)
   if (lc.includes("suv") || lc.includes("hatch") || lc.includes("sedan")) return "Car";
   if (lc.includes("bike") || lc.includes("scooter") || lc.includes("cruiser")) return "Bike";
 
   return undefined;
 }
 
+function sanitizeStateFromDtos(
+  prev: CompareState,
+  cleaned: VehicleWithDetailsDto[],
+  inferred?: VehicleKind
+): CompareState {
+  const keepSlugs = new Set(cleaned.map((x) => x.slug).filter(Boolean) as string[]);
+  const nextItems = prev.items.filter((x) => !!x.slug && keepSlugs.has(x.slug));
+  return { items: nextItems, vehicleType: inferred };
+}
+
 export function ComparePage() {
+  const nav = useNavigate();
+
   const [compare, setCompare] = useState(loadCompare());
 
   const [loading, setLoading] = useState(true);
   const [dtos, setDtos] = useState<VehicleWithDetailsDto[]>([]);
   const [vehicleType, setVehicleType] = useState<VehicleKind | undefined>();
   const [err, setErr] = useState<string | null>(null);
-
-  /* =========================
-     Reactivity (same + multi tab)
-     ========================= */
 
   useEffect(() => {
     const off = onCompareChanged(setCompare);
@@ -105,20 +119,14 @@ export function ComparePage() {
     };
   }, []);
 
-  /* =========================
-     Actions (no compareState edits)
-     ========================= */
-
   function handleRemove(slug?: string | null) {
     if (!slug) return;
 
     const cur = loadCompare();
     const nextItems = cur.items.filter((x) => x.slug !== slug);
 
-    const next =
-      nextItems.length >= 2
-        ? { ...cur, items: nextItems }
-        : { items: nextItems, vehicleType: undefined };
+    const next: CompareState =
+      nextItems.length === 0 ? { items: [] } : { ...cur, items: nextItems };
 
     saveCompare(next);
     setCompare(next);
@@ -129,9 +137,9 @@ export function ComparePage() {
     setCompare(next);
   }
 
-  /* =========================
-     Load vehicles by slug
-     ========================= */
+  function handleAddMore() {
+    nav("/vehicles");
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -150,9 +158,7 @@ export function ComparePage() {
 
         const slugs = compare.items
           .map((x) => x.slug)
-          .filter(
-            (s): s is string => typeof s === "string" && s.trim().length > 0
-          );
+          .filter((s): s is string => typeof s === "string" && s.trim().length > 0);
 
         if (slugs.length < 2) {
           setDtos([]);
@@ -161,7 +167,6 @@ export function ComparePage() {
           return;
         }
 
-        // allow partial failures; then we sanitize compare storage
         const settled = await Promise.allSettled(
           slugs.map((slug) => getPublicVehicleBySlug(slug))
         );
@@ -189,16 +194,11 @@ export function ComparePage() {
 
         // sanitize storage: remove failed slugs + mismatched category types
         if (failedSlugs.length > 0 || cleaned.length !== ok.length) {
-          const keepSlugs = new Set(cleaned.map((x) => x.slug).filter(Boolean));
-
-          const nextItems = compare.items.filter((x) => {
-            if (!x.slug) return false;
-            return keepSlugs.has(x.slug) && !failedSlugs.includes(x.slug);
+          setCompare((prev) => {
+            const next = sanitizeStateFromDtos(prev, cleaned, inferred);
+            saveCompare(next);
+            return next;
           });
-
-          const next = { items: nextItems, vehicleType: inferred };
-          saveCompare(next);
-          setCompare(next);
         }
       } catch (e: unknown) {
         if (!cancelled) {
@@ -212,7 +212,7 @@ export function ComparePage() {
     return () => {
       cancelled = true;
     };
-  }, [compare.items]);
+  }, [compare.items, compare.vehicleType]);
 
   const fields = useMemo(() => {
     if (vehicleType === "Bike") return [...COMMON_FIELDS, ...BIKE_FIELDS];
@@ -220,55 +220,67 @@ export function ComparePage() {
     return [...COMMON_FIELDS];
   }, [vehicleType]);
 
-  /* =========================
-     Render
-     ========================= */
-
-  if (loading) return <p style={{ padding: "2rem" }}>Loading comparison…</p>;
-  if (err) return <p style={{ padding: "2rem", color: "crimson" }}>{err}</p>;
+  if (loading) return <div className="public-page">Loading comparison…</div>;
+  if (err) return <div className="public-page error">{err}</div>;
 
   if (dtos.length < 2) {
     return (
-      <div style={{ padding: "2rem" }}>
-        <h1 style={{ marginBottom: 6 }}>Compare</h1>
-        <p className="muted" style={{ marginBottom: 14 }}>
-          Select at least 2 vehicles of the same type to compare.
-        </p>
-        <button className="btn" onClick={handleClearAll}>
-          Clear compare
-        </button>
+      <div className="public-page">
+        <div className="compare-head">
+          <div>
+            <h1 className="public-title">Compare</h1>
+            <p className="public-subtitle">
+              Select at least 2 vehicles of the same type to compare.
+            </p>
+          </div>
+
+          <div className="compare-actions">
+            <button className="public-btn public-btn--ghost" onClick={handleAddMore}>
+              Add vehicles
+            </button>
+            <button className="public-btn public-btn--danger" onClick={handleClearAll}>
+              Clear
+            </button>
+          </div>
+        </div>
+
+        <div className="empty-state">
+          <p className="muted">
+            Your compare list is empty (or has only 1 vehicle).
+          </p>
+          <Link className="public-btn public-btn--primary" to="/vehicles">
+            Browse vehicles
+          </Link>
+        </div>
       </div>
     );
   }
 
   return (
-    <div style={{ padding: "2rem" }}>
-      <div
-        style={{
-          display: "flex",
-          alignItems: "baseline",
-          justifyContent: "space-between",
-          gap: 12,
-          marginBottom: 12,
-        }}
-      >
+    <div className="public-page">
+      <div className="compare-head">
         <div>
-          <h1 style={{ marginBottom: 6 }}>Compare</h1>
-          <p className="muted">
+          <h1 className="public-title">Compare</h1>
+          <p className="public-subtitle">
             Comparing {dtos.length} {vehicleType ?? "vehicles"}
           </p>
         </div>
 
-        <button className="btn" onClick={handleClearAll}>
-          Clear all
-        </button>
+        <div className="compare-actions">
+          <button className="public-btn public-btn--ghost" onClick={handleAddMore}>
+            Add more
+          </button>
+          <button className="public-btn public-btn--danger" onClick={handleClearAll}>
+            Clear all
+          </button>
+        </div>
       </div>
 
-      <div style={{ overflowX: "auto" }}>
-        <table className="admin-table" style={{ minWidth: 980 }}>
+      <div className="compare-wrap">
+        <table className="compare-table">
           <thead>
             <tr>
-              <th>Spec</th>
+              <th className="compare-spec">Spec</th>
 
               {dtos.map((v) => {
                 const brand = dash(v.brand);
@@ -277,42 +289,52 @@ export function ComparePage() {
                 const img = v.imageUrl?.trim() ? v.imageUrl : FALLBACK_IMG;
 
                 return (
-                  <th key={v.id}>
-                    <div style={{ display: "grid", gap: 10 }}>
-                      <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                  <th key={v.id} className="compare-col">
+                    <div className="compare-vehicle">
+                      <div className="compare-vehicle-top">
                         <img
                           src={img}
                           alt={`${brand} ${model}`}
-                          style={{
-                            width: 120,
-                            height: 80,
-                            objectFit: "cover",
-                            borderRadius: 8,
-                          }}
+                          className="compare-img"
                           onError={(e) => {
                             e.currentTarget.src = FALLBACK_IMG;
                           }}
                         />
 
-                        <div>
-                          <div style={{ fontWeight: 800 }}>
+                        <div className="compare-title">
+                          <div className="compare-name">
                             {brand} {model}
                           </div>
-                          {variant !== "—" && (
-                            <div className="muted" style={{ fontSize: 12 }}>
-                              {variant}
-                            </div>
-                          )}
+                          {variant !== "—" && <div className="compare-variant">{variant}</div>}
+                          <div className="compare-meta">
+                            <span>{v.year ?? "—"}</span>
+                            <span>·</span>
+                            <span>{v.category ?? "—"}</span>
+                          </div>
                         </div>
                       </div>
 
-                      <button
-                        className="btn btn-danger"
-                        onClick={() => handleRemove(v.slug)}
-                        style={{ justifySelf: "start" }}
-                      >
-                        Remove
-                      </button>
+                      <div className="compare-vehicle-actions">
+                        {v.slug ? (
+                          <Link
+                            className="public-btn public-btn--ghost"
+                            to={`/vehicles/${encodeURIComponent(v.slug)}`}
+                          >
+                            View
+                          </Link>
+                        ) : (
+                          <button className="public-btn public-btn--ghost" disabled>
+                            View
+                          </button>
+                        )}
+
+                        <button
+                          className="public-btn public-btn--danger"
+                          onClick={() => handleRemove(v.slug)}
+                        >
+                          Remove
+                        </button>
+                      </div>
                     </div>
                   </th>
                 );
@@ -323,7 +345,7 @@ export function ComparePage() {
           <tbody>
             {fields.map((f) => (
               <tr key={f.key}>
-                <td style={{ fontWeight: 800 }}>{f.label}</td>
+                <td className="compare-spec-cell">{f.label}</td>
                 {dtos.map((v) => {
                   const raw = f.get(v);
                   const cell = f.format ? f.format(raw) : safeCell(raw);
