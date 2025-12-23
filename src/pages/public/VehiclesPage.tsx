@@ -32,7 +32,9 @@ const CAR_CATEGORIES = new Set([
 
 type CategoryFilter = "all" | "bike" | "car";
 type SortBy = "priceAsc" | "priceDesc" | "yearAsc" | "yearDesc";
-
+type BundleKey = "none" | "budget" | "newest" | "ev" | "suv" | "commuter";
+type FeaturedTab = "trending" | "popular" | "electric" | "upcoming";
+type BrowseTab = "brand" | "budget" | "body";
 type MaybeError = { message?: string };
 
 const HERO_IMG =
@@ -48,6 +50,43 @@ function safeNum(v: unknown) {
   return typeof v === "number" && Number.isFinite(v) ? v : 0;
 }
 
+function clamp(n: number, a: number, b: number) {
+  return Math.max(a, Math.min(b, n));
+}
+
+function formatINR(n: number) {
+  return `₹ ${Math.round(n).toLocaleString("en-IN")}`;
+}
+
+function computePercentile(values: number[], p: number) {
+  const v = values
+    .filter((x) => Number.isFinite(x) && x > 0)
+    .sort((a, b) => a - b);
+  if (v.length === 0) return 0;
+  const idx = clamp(Math.floor((v.length - 1) * p), 0, v.length - 1);
+  return v[idx];
+}
+
+function roundToNearest(n: number, step: number) {
+  if (!Number.isFinite(n) || n <= 0) return 0;
+  return Math.round(n / step) * step;
+}
+
+function isBikeCategory(catRaw: unknown) {
+  const cat = safeStr(catRaw).trim();
+  return cat.length > 0 && BIKE_CATEGORIES.has(cat);
+}
+
+function isCarCategory(catRaw: unknown) {
+  const cat = safeStr(catRaw).trim();
+  return cat.length > 0 && CAR_CATEGORIES.has(cat);
+}
+
+function isEvVehicle(v: VehicleListItem) {
+  const cat = safeStr(v.category).toLowerCase();
+  return cat.startsWith("ev") || cat.includes("ev ");
+}
+
 export function VehiclesPage() {
   const nav = useNavigate();
 
@@ -58,12 +97,13 @@ export function VehiclesPage() {
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState<CategoryFilter>("all");
   const [sortBy, setSortBy] = useState<SortBy>("priceAsc");
+  const [bundle, setBundle] = useState<BundleKey>("none");
+
+  const [featuredTab, setFeaturedTab] = useState<FeaturedTab>("trending");
+  const [browseTab, setBrowseTab] = useState<BrowseTab>("brand");
 
   const [compare, setCompare] = useState(loadCompare());
 
-  /* =========================
-     Compare sync (multi-tab safe)
-     ========================= */
   useEffect(() => {
     const off = onCompareChanged(setCompare);
 
@@ -80,9 +120,6 @@ export function VehiclesPage() {
     };
   }, []);
 
-  /* =========================
-     Load vehicles
-     ========================= */
   useEffect(() => {
     let alive = true;
 
@@ -106,11 +143,61 @@ export function VehiclesPage() {
     };
   }, []);
 
-  /* =========================
-     Filtering + sorting
-     ========================= */
+  const bundleMeta = useMemo(() => {
+    const prices = vehicles.map((v) => safeNum(v.price)).filter((x) => x > 0);
+    const years = vehicles.map((v) => safeNum(v.year)).filter((x) => x > 0);
+
+    const p30 = computePercentile(prices, 0.3);
+    const budgetUnderRaw = p30 > 0 ? p30 : 150000;
+    const budgetUnder = roundToNearest(budgetUnderRaw, 10000) || 150000;
+
+    const maxYear = years.length ? Math.max(...years) : 0;
+    const newestYearFloor = maxYear > 0 ? maxYear - 1 : 0;
+
+    return { budgetUnder, maxYear, newestYearFloor };
+  }, [vehicles]);
+
+  function goGrid() {
+    setTimeout(() => {
+      document.querySelector(".catalog-controls")?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    }, 0);
+  }
+
+  function applyPreset(next: BundleKey) {
+    setBundle(next);
+    goGrid();
+  }
+
+  const bundlePredicate = useMemo(() => {
+    switch (bundle) {
+      case "budget":
+        return (v: VehicleListItem) => {
+          const p = safeNum(v.price);
+          return p > 0 && p <= bundleMeta.budgetUnder;
+        };
+      case "newest":
+        return (v: VehicleListItem) => {
+          const y = safeNum(v.year);
+          return y > 0 && y >= bundleMeta.newestYearFloor;
+        };
+      case "ev":
+        return (v: VehicleListItem) => isEvVehicle(v);
+      case "suv":
+        return (v: VehicleListItem) =>
+          safeStr(v.category).trim().toLowerCase() === "suv";
+      case "commuter":
+        return (v: VehicleListItem) =>
+          safeStr(v.category).trim().toLowerCase() === "commuter";
+      default:
+        return () => true;
+    }
+  }, [bundle, bundleMeta.budgetUnder, bundleMeta.newestYearFloor]);
+
   const filteredVehicles = useMemo(() => {
-    let list = vehicles;
+    let list = vehicles.filter(bundlePredicate);
 
     const s = search.trim().toLowerCase();
     if (s) {
@@ -118,18 +205,20 @@ export function VehiclesPage() {
         const brand = safeStr(v.brand).toLowerCase();
         const model = safeStr(v.model).toLowerCase();
         const variant = safeStr(v.variant).toLowerCase();
-        return brand.includes(s) || model.includes(s) || variant.includes(s);
+        const cat = safeStr(v.category).toLowerCase();
+        return (
+          brand.includes(s) ||
+          model.includes(s) ||
+          variant.includes(s) ||
+          cat.includes(s)
+        );
       });
     }
 
     if (category === "bike") {
-      list = list.filter(
-        (v) => !!v.category && BIKE_CATEGORIES.has(v.category.trim())
-      );
+      list = list.filter((v) => !!v.category && isBikeCategory(v.category));
     } else if (category === "car") {
-      list = list.filter(
-        (v) => !!v.category && CAR_CATEGORIES.has(v.category.trim())
-      );
+      list = list.filter((v) => !!v.category && isCarCategory(v.category));
     }
 
     const sorted = [...list];
@@ -154,7 +243,47 @@ export function VehiclesPage() {
     });
 
     return sorted;
-  }, [vehicles, search, category, sortBy]);
+  }, [vehicles, bundlePredicate, search, category, sortBy]);
+
+  /* =========================
+     Featured section (BikeWale-style)
+     ========================= */
+  const featuredList = useMemo(() => {
+    const base = vehicles.filter(
+      (v) => safeNum(v.price) > 0 && safeNum(v.year) > 0
+    );
+
+    const newest = [...base].sort((a, b) => safeNum(b.year) - safeNum(a.year));
+    const cheapestRecent = [...base]
+      .filter((v) => safeNum(v.year) >= bundleMeta.maxYear - 3)
+      .sort((a, b) => safeNum(a.price) - safeNum(b.price));
+
+    const maxYear = bundleMeta.maxYear;
+
+    switch (featuredTab) {
+      case "trending":
+        return newest.slice(0, 12);
+      case "popular":
+        return cheapestRecent.slice(0, 12);
+      case "electric":
+        return base.filter(isEvVehicle).slice(0, 12);
+      case "upcoming":
+        return base.filter((v) => safeNum(v.year) === maxYear).slice(0, 12);
+      default:
+        return newest.slice(0, 12);
+    }
+  }, [vehicles, featuredTab, bundleMeta.maxYear]);
+
+  const topBrands = useMemo(() => {
+    const brands = vehicles.map((v) => safeStr(v.brand).trim()).filter(Boolean);
+    const map = new Map<string, number>();
+    for (const b of brands) map.set(b, (map.get(b) ?? 0) + 1);
+
+    return Array.from(map.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 12)
+      .map(([b]) => b);
+  }, [vehicles]);
 
   const compareCount = compare.items.length;
 
@@ -169,7 +298,6 @@ export function VehiclesPage() {
     const next = toggleCompare(loadCompare(), v);
     setCompare(next);
 
-    // Scroll to compare bar when first item is added
     if (compare.items.length === 0) {
       setTimeout(() => {
         document.querySelector(".compare-bar")?.scrollIntoView({
@@ -216,8 +344,198 @@ export function VehiclesPage() {
         </div>
       </section>
 
+      {/* ================= HOMEPAGE BUNDLES ================= */}
+      <section className="catalog-section catalog-section--spaced">
+        <div className="bundle-head">
+          <div>
+            <h2 className="bundle-title">Featured Vehicles</h2>
+            <div className="bundle-tabs">
+              <button
+                className={`bundle-tab ${featuredTab === "trending" ? "is-active" : ""}`}
+                onClick={() => setFeaturedTab("trending")}
+              >
+                Trending
+              </button>
+              <button
+                className={`bundle-tab ${featuredTab === "popular" ? "is-active" : ""}`}
+                onClick={() => setFeaturedTab("popular")}
+              >
+                Popular
+              </button>
+              <button
+                className={`bundle-tab ${featuredTab === "electric" ? "is-active" : ""}`}
+                onClick={() => setFeaturedTab("electric")}
+              >
+                Electric
+              </button>
+              <button
+                className={`bundle-tab ${featuredTab === "upcoming" ? "is-active" : ""}`}
+                onClick={() => setFeaturedTab("upcoming")}
+                disabled={bundleMeta.maxYear === 0}
+              >
+                Upcoming
+              </button>
+            </div>
+          </div>
+
+          <button
+            className="bundle-viewall"
+            onClick={() => {
+              if (featuredTab === "electric") applyPreset("ev");
+              else if (featuredTab === "popular") applyPreset("budget");
+              else applyPreset("newest");
+            }}
+          >
+            View all
+          </button>
+        </div>
+
+        <div className="bundle-row">
+          {featuredList.map((v) => {
+            const slug = safeStr(v.slug);
+            const to =
+              slug.trim().length > 0
+                ? `/vehicles/${encodeURIComponent(slug)}`
+                : "/vehicles";
+
+            const title =
+              `${safeStr(v.brand)} ${safeStr(v.model)}`.trim() || "Vehicle";
+
+            const priceText =
+              typeof v.price === "number" && v.price > 0
+                ? `₹ ${v.price.toLocaleString("en-IN")}`
+                : "—";
+
+            return (
+              <Link key={`feat-${v.id}`} to={to} className="bundle-card vehicle-card">
+                <div className="vehicle-card-image-wrapper">
+                  <img
+                    src={safeStr(v.imageUrl) || FALLBACK_IMG}
+                    alt={title}
+                    className="vehicle-card-image"
+                    onError={(e) => {
+                      (e.currentTarget as HTMLImageElement).src = FALLBACK_IMG;
+                    }}
+                  />
+                </div>
+
+                <div className="vehicle-card-header">
+                  <h2 className="vehicle-card-title">{title}</h2>
+                  <p className="vehicle-card-variant">
+                    {safeStr(v.variant) || "—"}
+                  </p>
+                </div>
+
+                <div className="bundle-price">{priceText} onwards</div>
+              </Link>
+            );
+          })}
+        </div>
+
+        <div className="bundle-block">
+          <div className="bundle-head">
+            <div>
+              <h2 className="bundle-title">Browse Vehicles By</h2>
+              <div className="bundle-tabs">
+                <button
+                  className={`bundle-tab ${browseTab === "brand" ? "is-active" : ""}`}
+                  onClick={() => setBrowseTab("brand")}
+                >
+                  Brand
+                </button>
+                <button
+                  className={`bundle-tab ${browseTab === "budget" ? "is-active" : ""}`}
+                  onClick={() => setBrowseTab("budget")}
+                >
+                  Budget
+                </button>
+                <button
+                  className={`bundle-tab ${browseTab === "body" ? "is-active" : ""}`}
+                  onClick={() => setBrowseTab("body")}
+                >
+                  Body style
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {browseTab === "brand" && (
+            <div className="browse-grid">
+              {topBrands.map((b) => (
+                <button
+                  key={b}
+                  className="browse-pill"
+                  onClick={() => {
+                    setBundle("none");
+                    setSearch(b);
+                    goGrid();
+                  }}
+                >
+                  {b}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {browseTab === "budget" && (
+            <div className="browse-grid">
+              <button className="browse-pill" onClick={() => applyPreset("budget")}>
+                Under {formatINR(bundleMeta.budgetUnder)}
+              </button>
+              <button className="browse-pill" onClick={() => applyPreset("newest")}>
+                Newest launches
+              </button>
+              <button className="browse-pill" onClick={() => applyPreset("ev")}>
+                EVs
+              </button>
+              <button className="browse-pill" onClick={() => applyPreset("suv")}>
+                SUVs
+              </button>
+              <button className="browse-pill" onClick={() => applyPreset("commuter")}>
+                Commuters
+              </button>
+            </div>
+          )}
+
+          {browseTab === "body" && (
+            <div className="browse-grid">
+              <button className="browse-pill" onClick={() => applyPreset("suv")}>
+                SUVs
+              </button>
+              <button className="browse-pill" onClick={() => applyPreset("commuter")}>
+                Commuters
+              </button>
+              <button
+                className="browse-pill"
+                onClick={() => {
+                  setBundle("none");
+                  setSearch("Sedan");
+                  setCategory("car");
+                  goGrid();
+                }}
+              >
+                Sedans
+              </button>
+              <button
+                className="browse-pill"
+                onClick={() => {
+                  setBundle("none");
+                  setSearch("Hatchback");
+                  setCategory("car");
+                  goGrid();
+                }}
+              >
+                Hatchbacks
+              </button>
+            </div>
+          )}
+        </div>
+      </section>
+
       {/* ================= CONTROLS ================= */}
       <section className="catalog-section catalog-section--spaced">
+        <h2 style={{ marginBottom: 12 }}>All Vehicles</h2>
+
         <div className="catalog-controls">
           <input
             type="text"
@@ -291,9 +609,7 @@ export function VehiclesPage() {
 
                 <div className="vehicle-card-header">
                   <h2 className="vehicle-card-title">{title}</h2>
-                  <p className="vehicle-card-variant">
-                    {safeStr(v.variant) || "—"}
-                  </p>
+                  <p className="vehicle-card-variant">{safeStr(v.variant) || "—"}</p>
                 </div>
 
                 <div className="vehicle-card-specs">
@@ -303,17 +619,13 @@ export function VehiclesPage() {
                 <div className="vehicle-card-footer">
                   <span className="vehicle-card-tag">{v.year ?? "—"}</span>
                   <span className="vehicle-card-tag">{v.category ?? "—"}</span>
-                  <span className="vehicle-card-tag">
-                    {v.transmission ?? "—"}
-                  </span>
+                  <span className="vehicle-card-tag">{v.transmission ?? "—"}</span>
                 </div>
 
                 <div style={{ marginTop: 10 }}>
                   <button
                     className={`public-btn ${
-                      selected
-                        ? "public-btn--danger"
-                        : "public-btn--primary"
+                      selected ? "public-btn--danger" : "public-btn--primary"
                     }`}
                     style={{ width: "100%" }}
                     disabled={!canCompare}
@@ -342,21 +654,14 @@ export function VehiclesPage() {
       {compareCount > 0 && (
         <div className="compare-bar">
           <div>
-            <div className="compare-bar-title">
-              Compare: {compareCount}/4
-            </div>
+            <div className="compare-bar-title">Compare: {compareCount}/4</div>
             <div className="compare-bar-subtitle">
-              {compare.vehicleType
-                ? `Locked to ${compare.vehicleType}`
-                : "Pick one type"}
+              {compare.vehicleType ? `Locked to ${compare.vehicleType}` : "Pick one type"}
             </div>
           </div>
 
           <div className="compare-bar-actions">
-            <button
-              className="public-btn public-btn--ghost"
-              onClick={onClearCompare}
-            >
+            <button className="public-btn public-btn--ghost" onClick={onClearCompare}>
               Clear
             </button>
             <button
