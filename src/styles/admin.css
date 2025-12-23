@@ -12,7 +12,6 @@
   --shadow-soft: 0 6px 18px rgba(15, 23, 42, 0.08);
 }
 
-/* Base hardening */
 html,
 body {
   max-width: 100%;
@@ -44,7 +43,6 @@ canvas {
   word-break: break-word;
 }
 
-/* Shared headers */
 .page-header {
   display: flex;
   align-items: center;
@@ -66,7 +64,6 @@ canvas {
   color: var(--text-muted);
 }
 
-/* Buttons */
 .btn {
   border: none;
   padding: 0.45rem 1rem;
@@ -107,7 +104,6 @@ canvas {
   background: var(--bg-alt);
 }
 
-/* Alerts & inputs */
 .muted {
   font-size: 0.85rem;
   color: var(--text-muted);
@@ -136,7 +132,6 @@ canvas {
   color: var(--text);
 }
 
-/* Slide-over panel */
 .slide-over {
   position: fixed;
   inset: 0;
@@ -231,7 +226,6 @@ canvas {
   gap: 1rem;
 }
 
-/* Fields & forms */
 .field label {
   display: block;
   font-size: 0.85rem;
@@ -279,7 +273,6 @@ canvas {
   gap: 1rem;
 }
 
-/* Admin layout */
 .admin-root {
   min-height: 100vh;
   display: flex;
@@ -330,7 +323,6 @@ canvas {
   width: 100%;
 }
 
-/* Form tabs */
 .form-tabs {
   display: flex;
   gap: 0.5rem;
@@ -359,7 +351,6 @@ canvas {
   color: var(--danger);
 }
 
-/* Tables */
 .table-wrapper,
 .admin-table-wrapper {
   width: 100%;
@@ -391,16 +382,18 @@ canvas {
   border-top: 1px solid #e5e7eb;
 }
 
+/* One canonical admin-table block (used by admin list + compare) */
 .admin-table {
   width: 100%;
   border-collapse: collapse;
-  table-layout: fixed;
-  min-width: 1200px;
+  table-layout: auto;
+  min-width: 980px;
 }
 
 .admin-table th,
 .admin-table td {
-  padding: 0.6rem 0.8rem;
+  padding: 10px 12px;
+  vertical-align: middle;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -418,7 +411,30 @@ canvas {
   background: rgba(148, 163, 184, 0.08);
 }
 
-/* Filters & empty state */
+/* Compare improvements: sticky "Spec" column + allow header cell content to wrap a bit */
+.admin-table th:first-child,
+.admin-table td:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 6;
+  background: #0f172a;
+  color: #cbd5e1;
+  width: 180px;
+  min-width: 180px;
+  max-width: 240px;
+  text-align: left;
+}
+
+.admin-table td:first-child {
+  background: var(--bg-card);
+  color: var(--text);
+  z-index: 4;
+}
+
+.admin-table button {
+  pointer-events: auto;
+}
+
 .admin-filters {
   margin-bottom: 0.75rem;
 }
@@ -438,7 +454,73 @@ canvas {
   box-shadow: var(--shadow-soft);
 }
 
-/* Responsive */
+/* Variants Editor */
+.admin-variants {
+  width: 100%;
+}
+
+.admin-variants-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.variants-table {
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 10px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.variants-row {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr 0.7fr 0.7fr;
+  gap: 10px;
+  align-items: center;
+  padding: 10px 12px;
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.variants-row:first-child {
+  border-top: 0;
+}
+
+.variants-head {
+  font-size: 12px;
+  font-weight: 600;
+  opacity: 0.75;
+  background: rgba(0, 0, 0, 0.03);
+}
+
+.variants-name {
+  font-weight: 600;
+}
+
+.variants-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.variants-input {
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  background: #fff;
+  outline: none;
+}
+
+.variants-input:focus {
+  border-color: rgba(0, 0, 0, 0.25);
+}
+
+.variants-row.is-dirty {
+  background: rgba(255, 200, 0, 0.08);
+}
+
 @media (max-width: 768px) {
   .admin-main {
     padding: 1rem;
@@ -464,105 +546,3 @@ canvas {
     padding: 0.75rem;
   }
 }
-
-/* =========================
-   Variants Editor
-========================= */
-.admin-variants {
-  width: 100%;
-}
-
-.admin-variants-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 10px;
-}
-
-.variants-table {
-  border: 1px solid rgba(0,0,0,0.08);
-  border-radius: 10px;
-  overflow: hidden;
-  background: #fff;
-}
-
-.variants-row {
-  display: grid;
-  grid-template-columns: 1.4fr 1fr 0.7fr 0.7fr;
-  gap: 10px;
-  align-items: center;
-  padding: 10px 12px;
-  border-top: 1px solid rgba(0,0,0,0.06);
-}
-
-.variants-row:first-child {
-  border-top: 0;
-}
-
-.variants-head {
-  font-size: 12px;
-  font-weight: 600;
-  opacity: 0.75;
-  background: rgba(0,0,0,0.03);
-}
-
-.variants-name {
-  font-weight: 600;
-}
-
-.variants-center {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.variants-input {
-  width: 100%;
-  padding: 8px 10px;
-  border-radius: 8px;
-  border: 1px solid rgba(0,0,0,0.12);
-  background: #fff;
-  outline: none;
-}
-
-.variants-input:focus {
-  border-color: rgba(0,0,0,0.25);
-}
-
-.variants-row.is-dirty {
-  background: rgba(255, 200, 0, 0.08);
-}
-
-/* ===============================
-   FIX: Vehicle compare column
-   =============================== */
-
-.admin-table {
-  width: 100%;
-  border-collapse: collapse;
-  table-layout: auto; /* 🔥 important */
-}
-
-.admin-table th,
-.admin-table td {
-  padding: 10px 12px;
-  vertical-align: middle;
-  white-space: nowrap;
-}
-
-.admin-table th:first-child,
-.admin-table td:first-child {
-  width: 64px;           /* 🔥 reserve space for + button */
-  min-width: 64px;
-  text-align: center;
-}
-
-.admin-table button {
-  pointer-events: auto; /* 🔥 ensure clickable */
-}
-
-.admin-table-wrapper {
-  overflow-x: auto;
-}
-

@@ -1,6 +1,15 @@
 // src/features/vehicles/components/VehicleForm.tsx
+// FULL FILE — fixed React typing imports + safe inputs + checkbox-safe handleChange
 
-import { useEffect, useMemo, useState } from "react";
+import {
+  useEffect,
+  useMemo,
+  useState,
+  type ChangeEvent,
+  type Dispatch,
+  type FormEvent,
+  type SetStateAction,
+} from "react";
 import { POPULAR_BRANDS } from "./vehicleFormOptions";
 import {
   NUMBER_FIELDS,
@@ -133,7 +142,7 @@ export function VehicleForm({ initial, mode, onSubmit, onCancel }: Props) {
 
     const inferred = inferVehicleTypeFromCategory(initial);
 
-    setForm((prev: Vehicle) => ({
+    setForm((prev) => ({
       ...prev,
       ...initial,
       vehicleType:
@@ -167,11 +176,11 @@ export function VehicleForm({ initial, mode, onSubmit, onCancel }: Props) {
 
   // ✅ supports checkboxes + prevents boolean value leakage
   function handleChange(
-    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
+    e: ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
   ) {
     const { name } = e.target;
 
-    setForm((prev: Vehicle) => {
+    setForm((prev) => {
       const next: Vehicle = { ...prev };
       const key = name as keyof Vehicle;
 
@@ -181,7 +190,7 @@ export function VehicleForm({ initial, mode, onSubmit, onCancel }: Props) {
         return next;
       }
 
-      const value = (e.target as HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement).value;
+      const value = e.target.value;
 
       if (NUMBER_FIELDS.has(key)) {
         const num = value === "" ? 0 : Number(value);
@@ -204,10 +213,10 @@ export function VehicleForm({ initial, mode, onSubmit, onCancel }: Props) {
 
     if (!vehicleType) nextErrors.vehicleType = "Required.";
     if (!finalBrand) nextErrors.brand = "Required.";
-    if (!form.model.trim()) nextErrors.model = "Required.";
-    if (!form.category.trim()) nextErrors.category = "Required.";
+    if (!String(form.model ?? "").trim()) nextErrors.model = "Required.";
+    if (!String(form.category ?? "").trim()) nextErrors.category = "Required.";
 
-    if (isCar && !form.transmission.trim()) {
+    if (isCar && !String(form.transmission ?? "").trim()) {
       nextErrors.transmission = "Required for cars.";
     }
 
@@ -219,7 +228,7 @@ export function VehicleForm({ initial, mode, onSubmit, onCancel }: Props) {
     const p = Number(form.price);
     if (!p || p <= 0) nextErrors.price = "Must be greater than 0.";
 
-    if (form.imageUrl && !isValidHttpUrl(form.imageUrl)) {
+    if (form.imageUrl && !isValidHttpUrl(String(form.imageUrl))) {
       nextErrors.imageUrl = "Invalid URL.";
     }
 
@@ -227,7 +236,7 @@ export function VehicleForm({ initial, mode, onSubmit, onCancel }: Props) {
     return Object.keys(nextErrors).length === 0;
   }
 
-  async function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     if (submitting) return;
 
@@ -335,9 +344,9 @@ type BasicsTabProps = {
   customBrand: string;
   setSelectedBrand: (v: string) => void;
   setCustomBrand: (v: string) => void;
-  setForm: React.Dispatch<React.SetStateAction<Vehicle>>;
+  setForm: Dispatch<SetStateAction<Vehicle>>;
   handleChange: (
-    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
+    e: ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
   ) => void;
 };
 
@@ -379,9 +388,9 @@ function BasicsTab({
 
             if (value !== "Other") {
               setCustomBrand("");
-              setForm((prev: Vehicle) => ({ ...prev, brand: value }));
+              setForm((prev) => ({ ...prev, brand: value }));
             } else {
-              setForm((prev: Vehicle) => ({ ...prev, brand: "" }));
+              setForm((prev) => ({ ...prev, brand: "" }));
             }
           }}
         >
@@ -402,7 +411,7 @@ function BasicsTab({
             value={String(customBrand)}
             onChange={(e) => {
               setCustomBrand(e.target.value);
-              setForm((prev: Vehicle) => ({ ...prev, brand: e.target.value }));
+              setForm((prev) => ({ ...prev, brand: e.target.value }));
             }}
             style={{ marginTop: "0.5rem" }}
           />
@@ -490,7 +499,7 @@ function BasicsTab({
               src={String(form.imageUrl)}
               alt="Preview"
               onError={(e) => {
-                (e.currentTarget as HTMLImageElement).src = FALLBACK_PREVIEW_IMG;
+                e.currentTarget.src = FALLBACK_PREVIEW_IMG;
               }}
             />
           </div>
@@ -515,7 +524,7 @@ type SpecsTabProps = {
   isBike: boolean;
   isCar: boolean;
   handleChange: (
-    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
+    e: ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
   ) => void;
 };
 
@@ -656,36 +665,24 @@ function SpecsTab({ form, isBike, isCar, handleChange }: SpecsTabProps) {
           />
         </div>
 
-        {isBike && (
-          <>
-            <div className="field">
-              <label>Auto Start/Stop</label>
-              <input
-                name="autoStartStop"
-                value={String(form.autoStartStop ?? "")}
-                onChange={handleChange}
-              />
-            </div>
-
-            <div className="field">
-              <label>Range (km)</label>
-              <input
-                type="number"
-                name="range"
-                value={Number(form.range ?? 0)}
-                onChange={handleChange}
-              />
-            </div>
-          </>
-        )}
-
-        {isCar && (
+        {(isBike || isCar) && (
           <div className="field">
             <label>Range (km)</label>
             <input
               type="number"
               name="range"
               value={Number(form.range ?? 0)}
+              onChange={handleChange}
+            />
+          </div>
+        )}
+
+        {isBike && (
+          <div className="field">
+            <label>Auto Start/Stop</label>
+            <input
+              name="autoStartStop"
+              value={String(form.autoStartStop ?? "")}
               onChange={handleChange}
             />
           </div>

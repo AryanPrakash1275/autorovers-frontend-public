@@ -1,5 +1,5 @@
 // src/features/vehicles/components/VehicleListPage.tsx
-// FULL FILE (your version + Compare CTA bar) — FIXED compare toggle (unstuck)
+// FULL FILE — Filters upgraded (price min/max + hasSlug + hasImage) + Compare CTA
 
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -54,6 +54,17 @@ function hasSlug(row: VehicleListItem): boolean {
   return typeof row.slug === "string" && row.slug.trim().length > 0;
 }
 
+function hasImage(row: VehicleListItem): boolean {
+  return typeof row.imageUrl === "string" && row.imageUrl.trim().length > 0;
+}
+
+function parseNumOrNull(v: string): number | null {
+  const t = v.trim();
+  if (!t) return null;
+  const n = Number(t);
+  return Number.isFinite(n) ? n : null;
+}
+
 function buildCreateReq(data: Vehicle): CreateVehicleRequest {
   return {
     brand: data.brand,
@@ -69,7 +80,6 @@ function buildCreateReq(data: Vehicle): CreateVehicleRequest {
     imageUrl: sOrNull(data.imageUrl),
     vehicleType: sOrNull(String(data.vehicleType ?? "")),
 
-    // critical for backend powertrain derive (Ev vs Engine)
     engine: {
       engineType: sOrNull(data.engineType),
       engineDisplacement: nOrNull(data.engineDisplacement),
@@ -137,6 +147,12 @@ export function VehicleListPage() {
   const [transFilter, setTransFilter] = useState<string>("all");
   const [yearFilter, setYearFilter] = useState<string>("all");
 
+  // ✅ NEW filters
+  const [minPrice, setMinPrice] = useState<string>("");
+  const [maxPrice, setMaxPrice] = useState<string>("");
+  const [onlyHasSlug, setOnlyHasSlug] = useState(false);
+  const [onlyHasImage, setOnlyHasImage] = useState(false);
+
   const [isPanelOpen, setIsPanelOpen] = useState(false);
   const [mode, setMode] = useState<"create" | "edit">("create");
   const [editing, setEditing] = useState<Vehicle | null>(null);
@@ -163,8 +179,20 @@ export function VehicleListPage() {
   );
   const yearOptions = useMemo(() => buildYearOptions(vehicles), [vehicles]);
 
+  const priceBounds = useMemo(() => {
+    const prices = vehicles
+      .map((v) => (typeof v.price === "number" ? v.price : 0))
+      .filter((p) => Number.isFinite(p) && p > 0)
+      .sort((a, b) => a - b);
+
+    return {
+      min: prices.length ? prices[0] : 0,
+      max: prices.length ? prices[prices.length - 1] : 0,
+    };
+  }, [vehicles]);
+
   const visibleVehicles = useMemo(() => {
-    const filtered = applyFilters(vehicles, {
+    const base = applyFilters(vehicles, {
       query,
       typeFilter,
       brandFilter,
@@ -172,7 +200,22 @@ export function VehicleListPage() {
       yearFilter,
     });
 
-    return applySort(filtered, sortBy, sortDir);
+    const min = parseNumOrNull(minPrice);
+    const max = parseNumOrNull(maxPrice);
+
+    const after = base.filter((v) => {
+      if (onlyHasSlug && !hasSlug(v)) return false;
+      if (onlyHasImage && !hasImage(v)) return false;
+
+      const p =
+        typeof v.price === "number" && Number.isFinite(v.price) ? v.price : 0;
+      if (min !== null && p < min) return false;
+      if (max !== null && p > max) return false;
+
+      return true;
+    });
+
+    return applySort(after, sortBy, sortDir);
   }, [
     vehicles,
     query,
@@ -180,11 +223,15 @@ export function VehicleListPage() {
     brandFilter,
     transFilter,
     yearFilter,
+    minPrice,
+    maxPrice,
+    onlyHasSlug,
+    onlyHasImage,
     sortBy,
     sortDir,
   ]);
 
-  const hasFilters = hasAnyFilters({
+  const baseHasFilters = hasAnyFilters({
     query,
     typeFilter,
     brandFilter,
@@ -192,12 +239,25 @@ export function VehicleListPage() {
     yearFilter,
   });
 
+  const extraHasFilters =
+    minPrice.trim().length > 0 ||
+    maxPrice.trim().length > 0 ||
+    onlyHasSlug ||
+    onlyHasImage;
+
+  const hasFilters = baseHasFilters || extraHasFilters;
+
   function clearFilters() {
     setQuery("");
     setTypeFilter("all");
     setBrandFilter("all");
     setTransFilter("all");
     setYearFilter("all");
+
+    setMinPrice("");
+    setMaxPrice("");
+    setOnlyHasSlug(false);
+    setOnlyHasImage(false);
   }
 
   function openCreate() {
@@ -229,7 +289,6 @@ export function VehicleListPage() {
   }
 
   function onToggleCompare(row: VehicleListItem) {
-    // ✅ If already selected → ALWAYS allow removing (no blockers)
     const alreadySelected = compare.items.some((x) => x.id === row.id);
     if (alreadySelected) {
       const next = toggleCompare(compare, row);
@@ -238,16 +297,13 @@ export function VehicleListPage() {
       return;
     }
 
-    // ✅ Adding requires slug (ComparePage fetches by slug)
     if (!hasSlug(row)) {
       setActionError("This vehicle cannot be compared (missing slug).");
       return;
     }
 
-    // ✅ DO NOT require vehicleType here — compareState infers it from category
     const next = toggleCompare(compare, row);
 
-    // If nothing changed, toggleCompare rejected it (type mismatch / cannot infer type)
     if (next.items.length === compare.items.length) {
       setActionError(
         "Cannot add to compare (type mismatch or unable to infer type from category)."
@@ -275,7 +331,6 @@ export function VehicleListPage() {
       } else if (mode === "edit" && editing?.id) {
         await updateVehicle(editing.id, data);
 
-        // ✅ ONLY send fields your backend accepts (nested DTO)
         await updateVehicleDetails(editing.id, {
           description: data.description,
           colorsAvailableJson: data.colorsAvailableJson,
@@ -316,9 +371,7 @@ export function VehicleListPage() {
             wheelMaterial: data.wheelMaterial,
           },
 
-          bike: {
-            tankSize: data.tankSize,
-          },
+          bike: { tankSize: data.tankSize },
 
           car: {
             personCapacity: data.personCapacity,
@@ -434,6 +487,50 @@ export function VehicleListPage() {
               </option>
             ))}
           </select>
+        </div>
+
+        {/* ✅ NEW FILTER ROW */}
+        <div className="admin-filters-row" style={{ marginTop: 10 }}>
+          <input
+            type="number"
+            className="search-input"
+            style={{ width: 160 }}
+            placeholder={priceBounds.min ? `Min ₹ (eg ${priceBounds.min})` : "Min ₹"}
+            value={minPrice}
+            onChange={(e) => setMinPrice(e.target.value)}
+          />
+          <input
+            type="number"
+            className="search-input"
+            style={{ width: 160 }}
+            placeholder={priceBounds.max ? `Max ₹ (eg ${priceBounds.max})` : "Max ₹"}
+            value={maxPrice}
+            onChange={(e) => setMaxPrice(e.target.value)}
+          />
+
+          <label
+            className="muted"
+            style={{ display: "flex", gap: 8, alignItems: "center" }}
+          >
+            <input
+              type="checkbox"
+              checked={onlyHasSlug}
+              onChange={(e) => setOnlyHasSlug(e.target.checked)}
+            />
+            Has slug
+          </label>
+
+          <label
+            className="muted"
+            style={{ display: "flex", gap: 8, alignItems: "center" }}
+          >
+            <input
+              type="checkbox"
+              checked={onlyHasImage}
+              onChange={(e) => setOnlyHasImage(e.target.checked)}
+            />
+            Has image
+          </label>
 
           {hasFilters && (
             <button className="btn btn-ghost" onClick={clearFilters}>
