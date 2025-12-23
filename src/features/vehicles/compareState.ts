@@ -9,20 +9,82 @@ export type CompareState = {
   items: VehicleListItem[];
 };
 
+type Obj = Record<string, unknown>;
+
 function readString(v: unknown): string | undefined {
-  return typeof v === "string" && v.trim().length ? v : undefined;
+  return typeof v === "string" && v.trim().length ? v.trim() : undefined;
 }
 
-function readVehicleType(row: unknown): string | undefined {
-  if (!row || typeof row !== "object") return undefined;
-  if (!("vehicleType" in row)) return undefined;
+// ✅ Case-insensitive category inference
+const CAR_CATEGORIES = new Set(
+  [
+    "suv",
+    "hatchback",
+    "sedan",
+    "coupe",
+    "convertible",
+    "wagon",
+    "muv",
+    "mpv",
+    "crossover",
+    "pickup",
+    "truck",
+    "van",
+  ].map((x) => x.toLowerCase())
+);
 
-  const v = (row as { vehicleType?: unknown }).vehicleType;
-  return readString(v);
+const BIKE_CATEGORIES = new Set(
+  [
+    "naked",
+    "classic",
+    "roadster",
+    "cruiser",
+    "sports",
+    "sport",
+    "adventure",
+    "scooter",
+    "commuter",
+    "tourer",
+    "cafe racer",
+    "scrambler",
+    "off-road",
+    "off road",
+  ].map((x) => x.toLowerCase())
+);
+
+function inferTypeFromCategory(category?: string): string | undefined {
+  const raw = (category ?? "").trim();
+  if (!raw) return undefined;
+
+  const lc = raw.toLowerCase();
+
+  if (CAR_CATEGORIES.has(lc)) return "Car";
+  if (BIKE_CATEGORIES.has(lc)) return "Bike";
+
+  // fallback heuristic (safe)
+  if (lc.includes("suv") || lc.includes("hatch") || lc.includes("sedan")) return "Car";
+  if (lc.includes("bike") || lc.includes("scooter") || lc.includes("cruiser")) return "Bike";
+
+  return undefined;
 }
 
+// Exported so VehicleTable / ListPage can use the SAME logic
 export function getCompareVehicleType(row: VehicleListItem): string | undefined {
-  return readVehicleType(row);
+  const o = row as unknown as Obj;
+
+  // preferred keys (if backend ever starts returning them)
+  const vt = readString(o["vehicleType"]);
+  if (vt) return vt;
+
+  const kind = readString(o["kind"]);
+  if (kind) return kind;
+
+  const type = readString(o["type"]);
+  if (type) return type;
+
+  // infer from category (your current reality)
+  const cat = readString(o["category"]);
+  return inferTypeFromCategory(cat);
 }
 
 export function loadCompare(): CompareState {
@@ -37,7 +99,10 @@ export function loadCompare(): CompareState {
       ? getCompareVehicleType(parsed.items[0])
       : undefined;
 
-    return { vehicleType: inferredType, items: parsed.items };
+    return {
+      vehicleType: inferredType,
+      items: parsed.items,
+    };
   } catch {
     return { items: [] };
   }
@@ -47,10 +112,7 @@ export function saveCompare(state: CompareState) {
   localStorage.setItem(KEY, JSON.stringify(state));
 }
 
-export function toggleCompare(
-  state: CompareState,
-  vehicle: VehicleListItem
-): CompareState {
+export function toggleCompare(state: CompareState, vehicle: VehicleListItem): CompareState {
   const exists = state.items.some((v) => v.id === vehicle.id);
 
   // remove
@@ -69,20 +131,19 @@ export function toggleCompare(
 
   const incomingType = getCompareVehicleType(vehicle);
 
-  // If row can't be typed, block.
+  // If list row can't be typed even after inference, block.
   if (!incomingType) return state;
 
-  // If empty, lock to incoming type
+  // if empty, lock to incoming type
   if (state.items.length === 0) {
     const next: CompareState = { vehicleType: incomingType, items: [vehicle] };
     saveCompare(next);
     return next;
   }
 
-  // Otherwise enforce locked type
+  // otherwise enforce locked type
   const lockedType =
-    state.vehicleType ??
-    (state.items[0] ? getCompareVehicleType(state.items[0]) : undefined);
+    state.vehicleType ?? (state.items[0] ? getCompareVehicleType(state.items[0]) : undefined);
 
   if (!lockedType) return state;
   if (incomingType !== lockedType) return state;

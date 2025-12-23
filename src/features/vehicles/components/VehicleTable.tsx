@@ -61,6 +61,15 @@ function hasSlug(v: VehicleListItem): boolean {
   return typeof v.slug === "string" && v.slug.trim().length > 0;
 }
 
+function computeLockedType(compare: CompareState): string | undefined {
+  if (compare.vehicleType && compare.vehicleType.trim().length) return compare.vehicleType;
+
+  // fallback: infer from first selected item (covers older localStorage or edge cases)
+  const first = compare.items[0];
+  if (!first) return undefined;
+  return getCompareVehicleType(first);
+}
+
 export function VehicleTable({
   vehicles,
   sortBy,
@@ -74,6 +83,9 @@ export function VehicleTable({
   if (vehicles.length === 0) {
     return <p className="muted">No vehicles found.</p>;
   }
+
+  // ✅ always compute a reliable locked type (even if compare.vehicleType is undefined)
+  const lockedType = computeLockedType(compare);
 
   return (
     <div className="admin-table-wrapper">
@@ -171,7 +183,6 @@ export function VehicleTable({
           {vehicles.map((v) => {
             const selected = compare.items.some((x) => x.id === v.id);
 
-            const lockedType = compare.vehicleType;
             const incomingType = getCompareVehicleType(v);
 
             const typeMismatch =
@@ -182,20 +193,25 @@ export function VehicleTable({
             // ✅ hard rule: compare requires slug (ComparePage loads by slug)
             const missingSlug = !hasSlug(v);
 
-            // ✅ if already selected, allow removing even if other rules would block
+            // ✅ If already selected, ALWAYS allow removing.
+            // ✅ If not selected, enforce rules: slug, infer type, max 4, same type.
             const disabled =
-              !selected && (missingSlug || !incomingType || compare.items.length >= 4 || typeMismatch);
+              !selected &&
+              (missingSlug ||
+                !incomingType ||
+                compare.items.length >= 4 ||
+                typeMismatch);
 
             const title = selected
               ? "Remove from compare"
               : missingSlug
               ? "Cannot compare (missing slug)"
               : !incomingType
-              ? "Cannot compare (unknown vehicle type)"
+              ? "Cannot compare (unknown vehicle type from category)"
               : compare.items.length >= 4
               ? "Max 4 vehicles"
               : typeMismatch
-              ? "Only same vehicle type allowed"
+              ? `Only same vehicle type allowed (${lockedType})`
               : "Add to compare";
 
             return (

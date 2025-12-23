@@ -1,5 +1,5 @@
 // src/features/vehicles/components/VehicleListPage.tsx
-// FULL FILE (your version + Compare CTA bar) — FIXED updateVehicleDetails payload
+// FULL FILE (your version + Compare CTA bar) — FIXED compare toggle (unstuck)
 
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -69,7 +69,7 @@ function buildCreateReq(data: Vehicle): CreateVehicleRequest {
     imageUrl: sOrNull(data.imageUrl),
     vehicleType: sOrNull(String(data.vehicleType ?? "")),
 
-    // backend derives powertrain from r.Ev or r.Engine
+    // critical for backend powertrain derive (Ev vs Engine)
     engine: {
       engineType: sOrNull(data.engineType),
       engineDisplacement: nOrNull(data.engineDisplacement),
@@ -229,17 +229,33 @@ export function VehicleListPage() {
   }
 
   function onToggleCompare(row: VehicleListItem) {
+    // ✅ If already selected → ALWAYS allow removing (no blockers)
+    const alreadySelected = compare.items.some((x) => x.id === row.id);
+    if (alreadySelected) {
+      const next = toggleCompare(compare, row);
+      setActionError(null);
+      setCompare(next);
+      return;
+    }
+
+    // ✅ Adding requires slug (ComparePage fetches by slug)
     if (!hasSlug(row)) {
       setActionError("This vehicle cannot be compared (missing slug).");
       return;
     }
 
-    if (!row.vehicleType || String(row.vehicleType).trim().length === 0) {
-      setActionError("Cannot compare: vehicleType is missing on this row.");
+    // ✅ DO NOT require vehicleType here — compareState infers it from category
+    const next = toggleCompare(compare, row);
+
+    // If nothing changed, toggleCompare rejected it (type mismatch / cannot infer type)
+    if (next.items.length === compare.items.length) {
+      setActionError(
+        "Cannot add to compare (type mismatch or unable to infer type from category)."
+      );
       return;
     }
 
-    const next = toggleCompare(compare, row);
+    setActionError(null);
     setCompare(next);
   }
 
@@ -249,7 +265,9 @@ export function VehicleListPage() {
 
       if (mode === "create") {
         if (!data.fuelType || data.fuelType.trim().length === 0) {
-          setActionError("Fuel type is required (e.g., Petrol / Diesel / Electric).");
+          setActionError(
+            "Fuel type is required (e.g., Petrol / Diesel / Electric)."
+          );
           return;
         }
 
