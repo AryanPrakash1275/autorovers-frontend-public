@@ -1,4 +1,5 @@
 // src/features/vehicles/pages/ComparePage.tsx
+// FULL FILE — sticky spec column enabled + decision ordering + over-limit hardening
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
@@ -13,7 +14,10 @@ import {
 import { getPublicVehicleBySlug } from "../api";
 import type { VehicleWithDetailsDto, VehicleType, VehicleListItem } from "../types";
 
-import { getComparisonRowsForType, type ComparisonVehicle } from "../comparisonContract";
+import {
+  getComparisonRowsForType,
+  type ComparisonVehicle,
+} from "../comparisonContract";
 import { mapToComparisonVehicle } from "../mapToComparisonVehicle";
 import {
   getSelectedVehicleType,
@@ -147,7 +151,8 @@ export function ComparePage() {
     const cur = loadCompare();
     const nextItems = cur.items.filter((x) => x.slug !== slug);
 
-    const next: CompareState = nextItems.length === 0 ? { items: [] } : { ...cur, items: nextItems };
+    const next: CompareState =
+      nextItems.length === 0 ? { items: [] } : { ...cur, items: nextItems };
 
     saveCompare(next);
     // NOTE: saveCompare emits same-tab event → onCompareChanged updates state.
@@ -291,7 +296,9 @@ export function ComparePage() {
           return;
         }
 
-        const settled = await Promise.allSettled(slugs.map((slug) => getPublicVehicleBySlug(slug)));
+        const settled = await Promise.allSettled(
+          slugs.map((slug) => getPublicVehicleBySlug(slug))
+        );
 
         const ok: VehicleWithDetailsDto[] = [];
         const failedSlugs: string[] = [];
@@ -426,8 +433,11 @@ export function ComparePage() {
           </div>
         </div>
 
-        <div className="empty-state">
-          <p className="muted">Your compare list is empty (or has only 1 publishable vehicle).</p>
+        <div className="no-results">
+          Your compare list is empty (or has only 1 publishable vehicle).
+        </div>
+
+        <div style={{ marginTop: 12 }}>
           <Link className="public-btn public-btn--primary" to={browseTo}>
             Browse vehicles
           </Link>
@@ -471,6 +481,7 @@ export function ComparePage() {
       </div>
 
       <div className="compare-wrap">
+        {/* ✅ THE TWEAK: enable sticky "Spec" column */}
         <table className="compare-table compare-table--sticky-spec">
           <thead>
             <tr>
@@ -489,7 +500,6 @@ export function ComparePage() {
                         loading="lazy"
                         decoding="async"
                         onError={(e) => {
-                          // keep layout stable but avoid broken images
                           (e.currentTarget as HTMLImageElement).src =
                             "https://dummyimage.com/600x400/cccccc/000000&text=No+Image";
                         }}
