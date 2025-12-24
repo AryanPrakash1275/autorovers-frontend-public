@@ -1,9 +1,5 @@
 // src/pages/public/VehiclesPage.tsx
-// FULL FILE — Block C (typed browsing) + safe vehicleType handling + compare stays stable
-// ✅ Uses selectedType ("bike" | "car") from URL/storage
-// ✅ Filters EVERYTHING from typedVehicles (never mixed list)
-// ✅ Accepts backend "Bike"/"Car" OR "bike"/"car" in rows
-// ✅ Keeps URL/storage in sync (single source of truth)
+// FULL FILE — Block C stable + Block D (decision-grade cards + UX polish) — minimal change
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
@@ -88,7 +84,6 @@ function norm(v: unknown) {
   return typeof v === "string" ? v.trim().toLowerCase() : "";
 }
 
-// ✅ Accept backend "Bike"/"Car" and also "bike"/"car"
 function toSelectedTypeFromVehicleType(vt: unknown): VehicleType | undefined {
   const t = norm(vt);
   if (t === "bike") return "bike";
@@ -105,7 +100,6 @@ function inferSelectedTypeFromCategory(catRaw: unknown): VehicleType | undefined
 }
 
 function getSelectedTypeForRow(v: VehicleListItem): VehicleType | undefined {
-  // Prefer explicit vehicleType; fallback to category inference
   return (
     toSelectedTypeFromVehicleType(v.vehicleType) ?? inferSelectedTypeFromCategory(v.category)
   );
@@ -116,6 +110,24 @@ function isEvVehicle(v: VehicleListItem) {
   return c.startsWith("ev") || c.includes(" ev") || c.includes("electric");
 }
 
+function isNewVehicle(v: VehicleListItem, maxYear: number) {
+  const y = safeNum(v.year);
+  return maxYear > 0 && y >= maxYear - 1;
+}
+
+function isPopularHeuristic(v: VehicleListItem) {
+  const p = safeNum(v.price);
+  return p > 0 && p <= 200000;
+}
+
+function getBadges(v: VehicleListItem, maxYear: number) {
+  const badges: Array<{ kind: "ev" | "new" | "popular"; text: string }> = [];
+  if (isEvVehicle(v)) badges.push({ kind: "ev", text: "EV" });
+  if (isNewVehicle(v, maxYear)) badges.push({ kind: "new", text: "New" });
+  if (isPopularHeuristic(v)) badges.push({ kind: "popular", text: "Popular" });
+  return badges.slice(0, 2);
+}
+
 /* =========================
    Page
 ========================= */
@@ -124,17 +136,14 @@ export function VehiclesPage() {
   const nav = useNavigate();
 
   const [searchParams] = useSearchParams();
-  const urlTypeRaw = searchParams.get("type"); // "bike" | "car" | null
+  const urlTypeRaw = searchParams.get("type");
   const urlType = isVehicleType(urlTypeRaw) ? urlTypeRaw : undefined;
 
   const [selectedType, setSelectedType] = useState<VehicleType | undefined>(() =>
     getSelectedVehicleType()
   );
 
-  // ✅ Single-source-of-truth behavior:
-  // - If URL has valid type → persist it + use it
-  // - Else if storage has type → redirect to URL with that type
-  // - Else → bounce to "/"
+  // Canonical URL behavior (Block C)
   useEffect(() => {
     const stored = getSelectedVehicleType();
 
@@ -167,19 +176,36 @@ export function VehiclesPage() {
 
   const [compare, setCompare] = useState(loadCompare());
 
-  // ✅ Lock category once selectedType is resolved (UI only; browsing is enforced by typedVehicles)
+  // UI lock to current type (still enforced by typedVehicles anyway)
   useEffect(() => {
     if (!selectedType) return;
     setCategory(selectedType === "bike" ? "bike" : "car");
   }, [selectedType]);
 
-  // ✅ Block C: everything uses typedVehicles (never raw mixed list)
+  // ✅ Switch handler (fixes your "stuck on browse bikes" issue)
+  function switchType(next: VehicleType) {
+    // no-op
+    if (selectedType === next) return;
+
+    // update storage for global consistency (header uses it too)
+    setSelectedVehicleType(next);
+
+    // clear compare when switching type to avoid mixed compare state
+    const currentCompare = loadCompare();
+    if (currentCompare.items.length > 0) {
+      const cleared = clearCompare();
+      setCompare(cleared);
+    }
+
+    // canonical URL change (this triggers the canonical effect above)
+    nav(`/vehicles?type=${next}`, { replace: true });
+  }
+
   const typedVehicles = useMemo(() => {
     if (!selectedType) return [];
     return vehicles.filter((v) => getSelectedTypeForRow(v) === selectedType);
   }, [vehicles, selectedType]);
 
-  // ===== Featured row carousel state =====
   const featuredRowRef = useRef<HTMLDivElement | null>(null);
   const [canLeft, setCanLeft] = useState(false);
   const [canRight, setCanRight] = useState(false);
@@ -267,6 +293,13 @@ export function VehiclesPage() {
     goGrid();
   }
 
+  function resetFilters() {
+    setBundle("none");
+    setSearch("");
+    setSortBy("priceAsc");
+    goGrid();
+  }
+
   const bundlePredicate = useMemo(() => {
     switch (bundle) {
       case "budget":
@@ -282,8 +315,7 @@ export function VehiclesPage() {
       case "ev":
         return (v: VehicleListItem) => isEvVehicle(v);
       case "suv":
-        return (v: VehicleListItem) =>
-          selectedType === "car" && norm(v.category) === "suv";
+        return (v: VehicleListItem) => selectedType === "car" && norm(v.category) === "suv";
       case "commuter":
         return (v: VehicleListItem) =>
           selectedType === "bike" && norm(v.category) === "commuter";
@@ -293,7 +325,6 @@ export function VehiclesPage() {
   }, [bundle, bundleMeta.budgetUnder, bundleMeta.newestYearFloor, selectedType]);
 
   const filteredVehicles = useMemo(() => {
-    // ✅ Start from typedVehicles (never mixed list)
     let list = typedVehicles.filter(bundlePredicate);
 
     const s = search.trim().toLowerCase();
@@ -331,9 +362,6 @@ export function VehiclesPage() {
     return sorted;
   }, [typedVehicles, bundlePredicate, search, sortBy]);
 
-  /* =========================
-     Featured section
-========================= */
   const featuredList = useMemo(() => {
     const base = typedVehicles.filter((v) => safeNum(v.price) > 0 && safeNum(v.year) > 0);
 
@@ -385,6 +413,14 @@ export function VehiclesPage() {
     return compare.items.some((x) => x.id === id);
   }
 
+  function compareDisabledReason(v: VehicleListItem) {
+    if (typeof v.slug !== "string" || v.slug.trim().length === 0) return "Missing slug";
+    if (!selectedType) return "Type not selected";
+    const rowType = getSelectedTypeForRow(v);
+    if (rowType && rowType !== selectedType) return `Wrong type (${rowType})`;
+    return undefined;
+  }
+
   function onToggleCompare(e: React.MouseEvent, v: VehicleListItem) {
     e.preventDefault();
     e.stopPropagation();
@@ -418,7 +454,26 @@ export function VehiclesPage() {
 
   return (
     <div className={`public-page ${compareCount ? "has-comparebar" : ""}`}>
-      {/* ================= HERO ================= */}
+      {/* quick switch (no browse bikes/cars confusion) */}
+      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 10 }}>
+        <div className="type-switch">
+          <button
+            className={`type-switch-btn ${selectedType === "bike" ? "is-active" : ""}`}
+            onClick={() => switchType("bike")}
+            type="button"
+          >
+            Bikes
+          </button>
+          <button
+            className={`type-switch-btn ${selectedType === "car" ? "is-active" : ""}`}
+            onClick={() => switchType("car")}
+            type="button"
+          >
+            Cars
+          </button>
+        </div>
+      </div>
+
       <section className="hero hero-with-image">
         <div className="hero-bg">
           <img src={HERO_IMG} alt="Autorovers hero" className="hero-bg-image" />
@@ -436,7 +491,6 @@ export function VehiclesPage() {
         </div>
       </section>
 
-      {/* ================= HOMEPAGE BUNDLES ================= */}
       <section className="catalog-section catalog-section--spaced">
         <div className="bundle-head">
           <div>
@@ -482,7 +536,6 @@ export function VehiclesPage() {
           </button>
         </div>
 
-        {/* ✅ FEATURED CAROUSEL WITH ARROWS */}
         <div className="bundle-row-wrap">
           <button
             className="bundle-arrow"
@@ -505,11 +558,12 @@ export function VehiclesPage() {
                 slug.trim().length > 0 ? `/vehicles/${encodeURIComponent(slug)}` : "/vehicles";
 
               const title = `${safeStr(v.brand)} ${safeStr(v.model)}`.trim() || "Vehicle";
-
-              const priceText =
-                typeof v.price === "number" && v.price > 0
-                  ? `₹ ${v.price.toLocaleString("en-IN")}`
-                  : "—";
+              const year = safeNum(v.year) > 0 ? String(v.year) : "—";
+              const cat = safeStr(v.category) || "—";
+              const tr = safeStr(v.transmission) || "—";
+              const priceNum = safeNum(v.price);
+              const priceText = priceNum > 0 ? formatINR(priceNum) : "—";
+              const badges = getBadges(v, bundleMeta.maxYear);
 
               return (
                 <Link key={`feat-${v.id}`} to={to} className="bundle-card vehicle-card">
@@ -522,6 +576,18 @@ export function VehiclesPage() {
                         (e.currentTarget as HTMLImageElement).src = FALLBACK_IMG;
                       }}
                     />
+                    {badges.length > 0 && (
+                      <div className="vehicle-card-badges">
+                        {badges.map((b) => (
+                          <span
+                            key={`${v.id}-${b.kind}`}
+                            className={`vehicle-badge vehicle-badge--${b.kind}`}
+                          >
+                            {b.text}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </div>
 
                   <div className="vehicle-card-header">
@@ -529,7 +595,18 @@ export function VehiclesPage() {
                     <p className="vehicle-card-variant">{safeStr(v.variant) || "—"}</p>
                   </div>
 
-                  <div className="bundle-price">{priceText} onwards</div>
+                  <div className="vehicle-card-price-row">
+                    <div className="vehicle-card-price">{priceText}</div>
+                    <div className="vehicle-card-price-suffix">onwards</div>
+                  </div>
+
+                  <div className="vehicle-card-meta">
+                    <span className="vehicle-card-meta-item">{year}</span>
+                    <span className="vehicle-card-meta-dot">•</span>
+                    <span className="vehicle-card-meta-item">{cat}</span>
+                    <span className="vehicle-card-meta-dot">•</span>
+                    <span className="vehicle-card-meta-item">{tr}</span>
+                  </div>
                 </Link>
               );
             })}
@@ -675,11 +752,9 @@ export function VehiclesPage() {
         </div>
       </section>
 
-      {/* ================= CONTROLS ================= */}
       <section className="catalog-section catalog-section--spaced">
         <h2 style={{ marginBottom: 12 }}>
-          All Vehicles{" "}
-          <span style={{ opacity: 0.7, fontWeight: 400 }}>({typeLabel})</span>
+          All Vehicles <span style={{ opacity: 0.7, fontWeight: 400 }}>({typeLabel})</span>
         </h2>
 
         <div className="catalog-controls">
@@ -691,7 +766,6 @@ export function VehiclesPage() {
             onChange={(e) => setSearch(e.target.value)}
           />
 
-          {/* locked - browsing type is controlled by selector */}
           <select className="catalog-select" value={category} disabled>
             <option value="bike">Bikes</option>
             <option value="car">Cars</option>
@@ -710,11 +784,23 @@ export function VehiclesPage() {
         </div>
       </section>
 
-      {/* ================= GRID ================= */}
       <section className="catalog-section">
         <div className="vehicle-grid">
           {filteredVehicles.length === 0 && (
-            <div className="no-results">No vehicles match your filters.</div>
+            <div className="empty-state">
+              <div className="empty-state-title">No vehicles match your filters.</div>
+              <div className="empty-state-subtitle">
+                Try clearing search, or reset bundles back to the full catalog.
+              </div>
+              <div className="empty-state-actions">
+                <button className="public-btn public-btn--ghost" onClick={() => setSearch("")}>
+                  Clear search
+                </button>
+                <button className="public-btn public-btn--primary" onClick={resetFilters}>
+                  Reset catalog
+                </button>
+              </div>
+            </div>
           )}
 
           {filteredVehicles.map((v) => {
@@ -722,15 +808,26 @@ export function VehiclesPage() {
             const to =
               slug.trim().length > 0 ? `/vehicles/${encodeURIComponent(slug)}` : "/vehicles";
 
-            const priceText =
-              typeof v.price === "number" && v.price > 0
-                ? `Starting from ₹ ${v.price.toLocaleString("en-IN")}`
-                : "Price unavailable";
-
             const title = `${safeStr(v.brand)} ${safeStr(v.model)}`.trim() || "Vehicle";
+            const year = safeNum(v.year) > 0 ? String(v.year) : "—";
+            const cat = safeStr(v.category) || "—";
+            const tr = safeStr(v.transmission) || "—";
+
+            const priceNum = safeNum(v.price);
+            const priceText = priceNum > 0 ? formatINR(priceNum) : "—";
+            const badges = getBadges(v, bundleMeta.maxYear);
 
             const selected = isCompared(v.id);
-            const canCompare = typeof v.slug === "string" && v.slug.trim().length > 0;
+            const disabledReason = compareDisabledReason(v);
+            const canCompare = !disabledReason;
+
+            const compareBtnTitle = canCompare
+              ? selected
+                ? "Remove from compare"
+                : "Add to compare"
+              : `Can't compare: ${disabledReason}`;
+
+            const compareBtnText = selected ? "Remove" : "Add to Compare";
 
             return (
               <Link key={v.id} to={to} className="vehicle-card">
@@ -743,6 +840,19 @@ export function VehiclesPage() {
                       (e.currentTarget as HTMLImageElement).src = FALLBACK_IMG;
                     }}
                   />
+
+                  {badges.length > 0 && (
+                    <div className="vehicle-card-badges">
+                      {badges.map((b) => (
+                        <span
+                          key={`${v.id}-${b.kind}`}
+                          className={`vehicle-badge vehicle-badge--${b.kind}`}
+                        >
+                          {b.text}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 <div className="vehicle-card-header">
@@ -750,35 +860,38 @@ export function VehiclesPage() {
                   <p className="vehicle-card-variant">{safeStr(v.variant) || "—"}</p>
                 </div>
 
-                <div className="vehicle-card-specs">
-                  <span className="vehicle-card-price">{priceText}</span>
+                <div className="vehicle-card-price-row">
+                  <div className="vehicle-card-price">
+                    {priceText !== "—" ? priceText : "Price unavailable"}
+                  </div>
+                  {priceText !== "—" && <div className="vehicle-card-price-suffix">onwards</div>}
                 </div>
 
-                <div className="vehicle-card-footer">
-                  <span className="vehicle-card-tag">{v.year ?? "—"}</span>
-                  <span className="vehicle-card-tag">{v.category ?? "—"}</span>
-                  <span className="vehicle-card-tag">{v.transmission ?? "—"}</span>
+                <div className="vehicle-card-meta">
+                  <span className="vehicle-card-meta-item">{year}</span>
+                  <span className="vehicle-card-meta-dot">•</span>
+                  <span className="vehicle-card-meta-item">{cat}</span>
+                  <span className="vehicle-card-meta-dot">•</span>
+                  <span className="vehicle-card-meta-item">{tr}</span>
                 </div>
 
-                <div style={{ marginTop: 10 }}>
+                <div className="vehicle-card-cta">
                   <button
-                    className={`public-btn ${selected ? "public-btn--danger" : "public-btn--primary"}`}
+                    className={`public-btn ${
+                      selected ? "public-btn--danger" : "public-btn--primary"
+                    }`}
                     style={{ width: "100%" }}
                     disabled={!canCompare}
                     onClick={(e) => {
                       if (!canCompare) return;
                       onToggleCompare(e, v);
                     }}
-                    title={
-                      canCompare
-                        ? selected
-                          ? "Remove from compare"
-                          : "Add to compare"
-                        : "Missing slug (cannot compare)"
-                    }
+                    title={compareBtnTitle}
                   >
-                    {selected ? "Remove from Compare" : "Add to Compare"}
+                    {compareBtnText}
                   </button>
+
+                  {!canCompare && <div className="vehicle-card-hint">Fix: {disabledReason}</div>}
                 </div>
               </Link>
             );
@@ -786,7 +899,6 @@ export function VehiclesPage() {
         </div>
       </section>
 
-      {/* ================= COMPARE BAR ================= */}
       {compareCount > 0 && (
         <div className="compare-bar">
           <div>
@@ -804,8 +916,9 @@ export function VehiclesPage() {
               className="public-btn public-btn--primary"
               onClick={goCompare}
               disabled={compareCount < 2}
+              title={compareCount < 2 ? "Add at least 2 vehicles to compare" : "Open compare"}
             >
-              Compare
+              {compareCount < 2 ? "Select 2 to Compare" : "Compare"}
             </button>
           </div>
         </div>

@@ -1,3 +1,9 @@
+/* =========================
+   FULL FILE — src/styles/public.css
+   OG file + fixes + Block D polish
+   (No LOC nuking. Comments trimmed only where useless.)
+========================= */
+
 :root {
   --bg: #f6f7f9;
   --bg-card: #ffffff;
@@ -52,15 +58,17 @@ canvas {
   outline-offset: 2px;
 }
 
+/* ✅ FIX: was shrinking/centering the whole site on wide screens */
 body.public-view {
-  display: flex;
-  justify-content: center;
+  display: block;
+  justify-content: initial;
 }
 
 .public-root {
   min-height: 100vh;
   background: var(--bg);
   color: var(--text);
+  width: 100%;
 }
 
 .public-header {
@@ -100,6 +108,15 @@ body.public-view {
   color: var(--text);
 }
 
+/* ✅ Better wide-screen breathing room (won’t break small screens) */
+@media (min-width: 1280px) {
+  .public-page {
+    max-width: 1400px;
+    padding-left: 1.5rem;
+    padding-right: 1.5rem;
+  }
+}
+
 .public-page.error {
   color: var(--danger);
 }
@@ -114,21 +131,20 @@ body.public-view {
   gap: 0.75rem;
 }
 
-.public-nav-link {
-  font-size: 0.9rem;
-  color: var(--text-muted);
-  text-decoration: none;
+
+button.public-nav-link {
+  appearance: none;
+  background: transparent;
   padding: 0.35rem 0.75rem;
-  border-radius: var(--r-pill);
-  border: 1px solid transparent;
-  transition: var(--t-fast);
+  font: inherit;
+  color: var(--text-muted);
+  cursor: pointer;
 }
+
 
 .public-nav-link:hover {
   color: var(--text);
-  border-color: var(--border);
-  background: rgba(255, 255, 255, 0.95);
-}
+} 
 
 .public-nav-link--active {
   font-weight: 600;
@@ -161,6 +177,12 @@ body.public-view {
   overflow: hidden;
   background: #020617;
   border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+@media (min-width: 1280px) {
+  .hero {
+    max-width: 1400px;
+  }
 }
 
 .hero-with-image {
@@ -270,11 +292,18 @@ body.public-view {
   margin-top: 1rem;
 }
 
+/* ✅ Empty state that doesn’t look like a dead one-liner */
 .no-results {
   font-size: 1rem;
   margin-top: 1rem;
   color: var(--text-muted);
   grid-column: 1 / -1;
+
+  background: var(--bg-card);
+  border: 1px solid rgba(15, 23, 42, 0.1);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-2);
+  padding: 14px 16px;
 }
 
 .vehicle-grid {
@@ -296,6 +325,7 @@ body.public-view {
   box-shadow: var(--shadow-2);
   transition: transform var(--t-fast), box-shadow var(--t-fast),
     border-color var(--t-fast);
+  position: relative;
 }
 
 .vehicle-card:hover {
@@ -311,6 +341,7 @@ body.public-view {
   background: #ffffff;
   border: 1px solid var(--border);
   aspect-ratio: 16 / 9;
+  position: relative;
 }
 
 .vehicle-card-image {
@@ -318,6 +349,39 @@ body.public-view {
   height: 100%;
   object-fit: contain;
   padding: 6px;
+}
+
+/* Optional badges (won’t affect anything if not present in JSX) */
+.vehicle-card-badges {
+  position: absolute;
+  left: 10px;
+  top: 10px;
+  display: flex;
+  gap: 6px;
+  z-index: 2;
+}
+
+.vehicle-badge {
+  font-size: 0.72rem;
+  font-weight: 900;
+  padding: 0.22rem 0.55rem;
+  border-radius: var(--r-pill);
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  box-shadow: var(--shadow-1);
+  line-height: 1;
+}
+
+.vehicle-badge--ev {
+  color: var(--accent);
+}
+
+.vehicle-badge--new {
+  color: var(--success);
+}
+
+.vehicle-badge--popular {
+  color: var(--danger);
 }
 
 .vehicle-card-header {
@@ -328,7 +392,7 @@ body.public-view {
 
 .vehicle-card-title {
   font-size: 1.05rem;
-  font-weight: 650;
+  font-weight: 800;
   color: var(--text);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -352,7 +416,7 @@ body.public-view {
 }
 
 .vehicle-card-price {
-  font-weight: 800;
+  font-weight: 900;
   color: var(--accent);
 }
 
@@ -575,6 +639,35 @@ body.public-view {
   align-items: center;
 }
 
+/* ✅ Fallback: if ComparePage renders a plain <table> inside .compare-wrap */
+.compare-wrap table {
+  width: 100%;
+  min-width: 980px;
+  border-collapse: separate;
+  border-spacing: 0;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  overflow: hidden;
+  box-shadow: var(--shadow-2);
+}
+
+.compare-wrap table th,
+.compare-wrap table td {
+  padding: 12px 12px;
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
+  vertical-align: top;
+  white-space: nowrap;
+}
+
+.compare-wrap table thead th {
+  border-top: 0;
+  background: #f9fafb;
+  position: sticky;
+  top: 0;
+  z-index: 5;
+}
+
 .bundle-head {
   display: flex;
   justify-content: space-between;
@@ -666,7 +759,6 @@ body.public-view {
   color: var(--accent);
   font-size: 0.95rem;
 }
-
 
 .bundle-block {
   margin-top: 26px;
@@ -1082,6 +1174,7 @@ body.public-view {
   padding: 10px;
 }
 
+/* Dummy image handling (fixed selector) */
 .vehicle-card-image[src*="dummyimage.com"] {
   opacity: 0.55;
   filter: grayscale(1);
@@ -1095,70 +1188,33 @@ body.public-view {
   background: transparent;
 }
 
-.bundle-tab.is-active {
-  border-bottom-color: rgba(15, 23, 42, 0.95);
-}
-
-.bundle-viewall {
-  box-shadow: var(--shadow-1);
-}
-/* === FORCE PRICE COLOR CONSISTENCY === */
-
-/* Vehicle cards */
+/* Price color consistency */
 .vehicle-card-price,
 .bundle-price,
-.vehicle-price {
+.vehicle-price,
+.compare-table td strong,
+.compare-wrap table td strong,
+.variant-pill-price {
   color: var(--accent) !important;
 }
-
-/* “Starting from ₹ …” text */
-.vehicle-card a,
-.vehicle-card span,
-.vehicle-card p {
-  --price-blue: var(--accent);
-}
-
-.vehicle-card a:has(+ .vehicle-card-price),
-.vehicle-card a strong {
-  color: var(--accent);
-}
-
-/* Compare table prices */
-.compare-table td strong,
-.compare-table .price,
-.compare-name + .price {
-  color: var(--accent);
-}
-
-/* Variant pills price */
-.variant-pill-price {
-  color: var(--accent);
-}
-
-/* ================================
-   Featured Vehicles carousel arrows (FINAL)
-   ================================ */
 
 .bundle-row-wrap {
   display: grid;
   grid-template-columns: 44px 1fr 44px;
-  align-items: center; /* keep arrows vertically centered */
+  align-items: center;
   gap: 12px;
   margin-top: 14px;
 }
 
-/* allow scroll row to shrink inside grid (prevents clipping / wrapping) */
 .bundle-row-wrap > .bundle-row {
   min-width: 0;
 }
 
-/* make the middle column row behave nicely */
 .bundle-row.bundle-row--carousel {
   width: 100%;
   margin-top: 0;
   padding: 2px 4px 10px;
 
-  /* subtle premium edge fade (fixes half-cut look) */
   mask-image: linear-gradient(
     to right,
     transparent 0,
@@ -1175,7 +1231,6 @@ body.public-view {
   );
 }
 
-/* arrows */
 .bundle-arrow {
   width: 44px;
   height: 44px;
@@ -1192,7 +1247,6 @@ body.public-view {
   transition: var(--t-fast);
   user-select: none;
 
-  /* visual centering vs cards */
   transform: translateY(-10px);
 }
 
@@ -1211,7 +1265,6 @@ body.public-view {
   transform: translateY(-10px);
 }
 
-/* mobile: no arrows, no mask, swipe-only */
 @media (max-width: 640px) {
   .bundle-row-wrap {
     grid-template-columns: 1fr;
@@ -1226,4 +1279,43 @@ body.public-view {
     mask-image: none;
     -webkit-mask-image: none;
   }
+}
+
+/* =========================
+   Type switch (VehiclesPage)
+   ========================= */
+.type-switch {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  background: #fff;
+  box-shadow: var(--shadow-1);
+}
+
+.type-switch-btn {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  padding: 0.6rem 0.85rem;
+  font-size: 0.9rem;
+  font-weight: 850;
+  cursor: pointer;
+  transition: var(--t-fast);
+}
+
+.type-switch-btn:hover {
+  color: var(--text);
+  background: rgba(15, 23, 42, 0.03);
+}
+
+.type-switch-btn.is-active {
+  background: rgba(37, 99, 235, 0.12);
+  color: var(--text);
+}
+
+.type-switch-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
