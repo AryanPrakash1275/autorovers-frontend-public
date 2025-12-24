@@ -18,6 +18,7 @@ import {
   type ComparisonVehicle,
 } from "../comparisonContract";
 import { mapToComparisonVehicle } from "../mapToComparisonVehicle";
+import { getSelectedVehicleType } from "../vehicleTypeStorage";
 
 /* =========================
    Helpers
@@ -32,10 +33,6 @@ function sanitizeStateFromSlugs(
   return { items: nextItems, vehicleType: lockedType };
 }
 
-/* =========================
-   Component
-========================= */
-
 export function ComparePage() {
   const nav = useNavigate();
   const [compare, setCompare] = useState(loadCompare());
@@ -45,9 +42,8 @@ export function ComparePage() {
   const [vehicleType, setVehicleType] = useState<VehicleType | undefined>();
   const [err, setErr] = useState<string | null>(null);
 
-  /* =========================
-     Compare state listeners
-  ========================= */
+  const selectedType = getSelectedVehicleType();
+  const browseTo = selectedType ? `/vehicles?type=${selectedType}` : "/";
 
   useEffect(() => {
     const off = onCompareChanged(setCompare);
@@ -64,10 +60,6 @@ export function ComparePage() {
       window.removeEventListener("storage", onStorage);
     };
   }, []);
-
-  /* =========================
-     Actions
-  ========================= */
 
   function handleRemove(slug?: string | null) {
     if (!slug) return;
@@ -88,12 +80,8 @@ export function ComparePage() {
   }
 
   function handleAddMore() {
-    nav("/vehicles");
+    nav(browseTo);
   }
-
-  /* =========================
-     Load & validate vehicles
-  ========================= */
 
   useEffect(() => {
     let cancelled = false;
@@ -112,9 +100,7 @@ export function ComparePage() {
 
         const slugs = compare.items
           .map((x) => x.slug)
-          .filter(
-            (s): s is string => typeof s === "string" && s.trim().length > 0
-          );
+          .filter((s): s is string => typeof s === "string" && s.trim().length > 0);
 
         if (slugs.length < 2) {
           setDtos([]);
@@ -123,9 +109,7 @@ export function ComparePage() {
           return;
         }
 
-        const settled = await Promise.allSettled(
-          slugs.map((slug) => getPublicVehicleBySlug(slug))
-        );
+        const settled = await Promise.allSettled(slugs.map((slug) => getPublicVehicleBySlug(slug)));
 
         const ok: VehicleWithDetailsDto[] = [];
         const failedSlugs: string[] = [];
@@ -142,7 +126,6 @@ export function ComparePage() {
         for (const dto of ok) {
           const mapped = mapToComparisonVehicle(dto);
 
-          // ✅ DEBUG: print exactly why something is dropped
           if (!mapped.ok) {
             console.warn(
               `NOT PUBLISHABLE | slug=${String(dto.slug)} | reason=${mapped.reason} | type=${String(dto.vehicleType)} | cat=${String(dto.category)}`
@@ -174,16 +157,11 @@ export function ComparePage() {
         setVehicleType(lockedType);
         setLoading(false);
 
-        const shouldSanitize =
-          failedSlugs.length > 0 || publishable.length !== ok.length;
+        const shouldSanitize = failedSlugs.length > 0 || publishable.length !== ok.length;
 
         if (shouldSanitize) {
           setCompare((prev) => {
-            const next = sanitizeStateFromSlugs(
-              prev,
-              publishableSlugs,
-              lockedType
-            );
+            const next = sanitizeStateFromSlugs(prev, publishableSlugs, lockedType);
             saveCompare(next);
             return next;
           });
@@ -202,10 +180,6 @@ export function ComparePage() {
     };
   }, [compare.items, compare.vehicleType]);
 
-  /* =========================
-     Derived data
-  ========================= */
-
   const rows = useMemo(() => {
     if (!vehicleType) return [];
     return getComparisonRowsForType(vehicleType);
@@ -213,18 +187,12 @@ export function ComparePage() {
 
   const mappedVehicles = useMemo((): ComparisonVehicle[] => {
     const out: ComparisonVehicle[] = [];
-
     for (const d of dtos) {
       const r = mapToComparisonVehicle(d);
       if (r.ok) out.push(r.value);
     }
-
     return out;
   }, [dtos]);
-
-  /* =========================
-     Render guards
-  ========================= */
 
   if (loading) return <div className="public-page">Loading comparison…</div>;
   if (err) return <div className="public-page error">{err}</div>;
@@ -241,16 +209,10 @@ export function ComparePage() {
           </div>
 
           <div className="compare-actions">
-            <button
-              className="public-btn public-btn--ghost"
-              onClick={handleAddMore}
-            >
+            <button className="public-btn public-btn--ghost" onClick={handleAddMore}>
               Add vehicles
             </button>
-            <button
-              className="public-btn public-btn--danger"
-              onClick={handleClearAll}
-            >
+            <button className="public-btn public-btn--danger" onClick={handleClearAll}>
               Clear
             </button>
           </div>
@@ -260,17 +222,13 @@ export function ComparePage() {
           <p className="muted">
             Your compare list is empty (or has only 1 publishable vehicle).
           </p>
-          <Link className="public-btn public-btn--primary" to="/vehicles">
+          <Link className="public-btn public-btn--primary" to={browseTo}>
             Browse vehicles
           </Link>
         </div>
       </div>
     );
   }
-
-  /* =========================
-     Table
-  ========================= */
 
   return (
     <div className="public-page">
@@ -283,16 +241,10 @@ export function ComparePage() {
         </div>
 
         <div className="compare-actions">
-          <button
-            className="public-btn public-btn--ghost"
-            onClick={handleAddMore}
-          >
+          <button className="public-btn public-btn--ghost" onClick={handleAddMore}>
             Add more
           </button>
-          <button
-            className="public-btn public-btn--danger"
-            onClick={handleClearAll}
-          >
+          <button className="public-btn public-btn--danger" onClick={handleClearAll}>
             Clear all
           </button>
         </div>

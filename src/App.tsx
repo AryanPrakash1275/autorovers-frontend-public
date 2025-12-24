@@ -1,8 +1,10 @@
+// src/App.tsx
 import { Routes, Route, Navigate } from "react-router-dom";
 
 import { PublicLayout } from "./app/layouts/PublicLayout";
 import { AdminLayout } from "./app/layouts/AdminLayout";
 import { RequireAuth } from "./app/guards/RequireAuth";
+import { RequireVehicleType } from "./app/guards/RequireVehicleType";
 
 import { VehiclesPage } from "./pages/public/VehiclesPage";
 import { VehicleDetailsPage } from "./pages/public/VehicleDetailsPage";
@@ -10,7 +12,7 @@ import { LoginPage } from "./pages/admin/LoginPage";
 import { VehicleListPage } from "./features/vehicles/components/VehicleListPage";
 import { ComparePage } from "./features/vehicles/pages/ComparePage";
 
-// ✅ NEW: Selector
+// ✅ Selector
 import { VehicleTypeSelectPage } from "./pages/public/VehicleTypeSelectPage";
 
 export default function App() {
@@ -18,15 +20,34 @@ export default function App() {
     <Routes>
       {/* Public */}
       <Route element={<PublicLayout />}>
-        {/* ✅ Entry choice */}
+        {/* Entry choice */}
         <Route path="/" element={<VehicleTypeSelectPage />} />
 
-        {/* ✅ Listing requires type (otherwise bounce to /) */}
-        <Route path="/vehicles" element={<VehiclesPage />} />
-        <Route path="/vehicles/:slug" element={<VehicleDetailsPage />} />
-
-        {/* ✅ Comparison (public, read-only) */}
-        <Route path="/compare" element={<ComparePage />} />
+        {/* ✅ Guarded public flow */}
+        <Route
+          path="/vehicles"
+          element={
+            <RequireVehicleType>
+              <VehiclesPage />
+            </RequireVehicleType>
+          }
+        />
+        <Route
+          path="/vehicles/:slug"
+          element={
+            <RequireVehicleType>
+              <VehicleDetailsPage />
+            </RequireVehicleType>
+          }
+        />
+        <Route
+          path="/compare"
+          element={
+            <RequireVehicleType>
+              <ComparePage />
+            </RequireVehicleType>
+          }
+        />
       </Route>
 
       {/* Auth */}

@@ -12,6 +12,12 @@ import {
   onCompareChanged,
 } from "../../features/vehicles/compareState";
 import { Footer } from "../../shared/ui/Footer";
+import {
+  getSelectedVehicleType,
+  setSelectedVehicleType,
+  isVehicleType,
+  type VehicleType,
+} from "../../features/vehicles/vehicleTypeStorage";
 
 const BIKE_CATEGORIES = new Set(
   ["Sport", "Commuter", "Cruiser", "Tourer", "Off-road", "Scooter", "EV Bike"].map(
@@ -109,9 +115,35 @@ function isEvVehicle(v: VehicleListItem) {
 export function VehiclesPage() {
   const nav = useNavigate();
 
-  // ✅ NEW: read & enforce URL type lock
   const [searchParams] = useSearchParams();
-  const urlType = searchParams.get("type"); // "bike" | "car" | null
+  const urlTypeRaw = searchParams.get("type"); // "bike" | "car" | null
+  const urlType = isVehicleType(urlTypeRaw) ? urlTypeRaw : undefined;
+
+  const [selectedType, setSelectedType] = useState<VehicleType | undefined>(
+    () => getSelectedVehicleType()
+  );
+
+  // ✅ Single-source-of-truth behavior:
+  // - If URL has valid type → persist it + use it
+  // - Else if storage has type → redirect to URL with that type (keeps deep links consistent)
+  // - Else (guard should prevent this) → bounce to "/"
+  useEffect(() => {
+    const stored = getSelectedVehicleType();
+
+    if (urlType) {
+      if (stored !== urlType) setSelectedVehicleType(urlType);
+      setSelectedType(urlType);
+      return;
+    }
+
+    if (stored) {
+      setSelectedType(stored);
+      nav(`/vehicles?type=${stored}`, { replace: true });
+      return;
+    }
+
+    nav("/", { replace: true });
+  }, [urlType, nav]);
 
   const [vehicles, setVehicles] = useState<VehicleListItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -127,14 +159,11 @@ export function VehiclesPage() {
 
   const [compare, setCompare] = useState(loadCompare());
 
-  // ✅ Enforce /vehicles requires ?type=bike|car, and lock category accordingly
+  // ✅ Lock category once selectedType is resolved
   useEffect(() => {
-    if (urlType !== "bike" && urlType !== "car") {
-      nav("/", { replace: true });
-      return;
-    }
-    setCategory(urlType === "bike" ? "bike" : "car");
-  }, [urlType, nav]);
+    if (!selectedType) return;
+    setCategory(selectedType === "bike" ? "bike" : "car");
+  }, [selectedType]);
 
   // ===== Featured row carousel state =====
   const featuredRowRef = useRef<HTMLDivElement | null>(null);
@@ -153,7 +182,6 @@ export function VehiclesPage() {
     const el = featuredRowRef.current;
     if (!el) return;
 
-    // scroll by ~one viewport width (but not insane)
     const amount = Math.max(240, Math.floor(el.clientWidth * 0.85));
     el.scrollBy({ left: dir === "left" ? -amount : amount, behavior: "smooth" });
   }
@@ -267,7 +295,6 @@ export function VehiclesPage() {
       });
     }
 
-    // ✅ HUMAN category filter: uses vehicleType first, fallback to category inference
     if (category === "bike") {
       list = list.filter((v) => getType(v) === "Bike");
     } else if (category === "car") {
@@ -298,9 +325,6 @@ export function VehiclesPage() {
     return sorted;
   }, [vehicles, bundlePredicate, search, category, sortBy]);
 
-  /* =========================
-     Featured section (BikeWale-style)
-     ========================= */
   const featuredList = useMemo(() => {
     const base = vehicles.filter((v) => safeNum(v.price) > 0 && safeNum(v.year) > 0);
 
@@ -325,7 +349,6 @@ export function VehiclesPage() {
     }
   }, [vehicles, featuredTab, bundleMeta.maxYear]);
 
-  // keep arrows accurate when list/tab changes
   useEffect(() => {
     setTimeout(() => updateArrows(), 0);
   }, [featuredTab, featuredList.length]);
@@ -381,6 +404,8 @@ export function VehiclesPage() {
 
   if (loading) return <div className="public-page">Loading vehicles…</div>;
   if (error) return <div className="public-page error">{error}</div>;
+
+  const typeLabel = selectedType === "bike" ? "Bikes" : "Cars";
 
   return (
     <div className={`public-page ${compareCount ? "has-comparebar" : ""}`}>
@@ -448,7 +473,6 @@ export function VehiclesPage() {
           </button>
         </div>
 
-        {/* ✅ FEATURED CAROUSEL WITH ARROWS */}
         <div className="bundle-row-wrap">
           <button
             className="bundle-arrow"
@@ -618,9 +642,7 @@ export function VehiclesPage() {
       <section className="catalog-section catalog-section--spaced">
         <h2 style={{ marginBottom: 12 }}>
           All Vehicles{" "}
-          <span style={{ opacity: 0.7, fontWeight: 400 }}>
-            ({urlType === "bike" ? "Bikes" : "Cars"})
-          </span>
+          <span style={{ opacity: 0.7, fontWeight: 400 }}>({typeLabel})</span>
         </h2>
 
         <div className="catalog-controls">
@@ -632,7 +654,6 @@ export function VehiclesPage() {
             onChange={(e) => setSearch(e.target.value)}
           />
 
-          {/* ✅ Locked because browsing is locked by URL type */}
           <select className="catalog-select" value={category} disabled>
             <option value="bike">Bikes</option>
             <option value="car">Cars</option>

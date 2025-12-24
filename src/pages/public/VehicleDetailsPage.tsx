@@ -1,7 +1,7 @@
-// src/pages/VehicleDetailsPage.tsx
+// src/pages/public/VehicleDetailsPage.tsx
 
 import { useEffect, useMemo, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams, useNavigate } from "react-router-dom";
 
 import type {
   VehicleWithDetailsDto,
@@ -11,6 +11,7 @@ import type {
 } from "../../features/vehicles/types";
 import { getPublicVehicleBySlug } from "../../features/vehicles/api";
 import { Footer } from "../../shared/ui/Footer";
+import { getSelectedVehicleType } from "../../features/vehicles/vehicleTypeStorage";
 
 type MaybeError = { message?: string };
 
@@ -73,23 +74,23 @@ function sum(nums: number[]): number {
 ======================= */
 
 export function VehicleDetailsPage() {
+  const nav = useNavigate();
   const { slug } = useParams<{ slug: string }>();
+
+  // Guard already exists at routing, but keep this safe for runtime storage failures
+  const selectedType = getSelectedVehicleType();
+  useEffect(() => {
+    if (!selectedType) nav("/", { replace: true });
+  }, [selectedType, nav]);
+
+  const backTo = selectedType ? `/vehicles?type=${selectedType}` : "/";
 
   const [vehicle, setVehicle] = useState<VehicleWithDetailsDto | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Variant selection
-  const [selectedVariantId, setSelectedVariantId] = useState<number | null>(
-    null
-  );
-
-  // Addon selection hook (even if empty today)
+  const [selectedVariantId, setSelectedVariantId] = useState<number | null>(null);
   const [selectedAddonIds, setSelectedAddonIds] = useState<number[]>([]);
-
-  /* =======================
-     Derived
-  ======================= */
 
   const details: VehicleDetailsDto = vehicle?.details ?? {};
 
@@ -100,7 +101,6 @@ export function VehicleDetailsPage() {
 
   const variants: VehicleVariantDto[] = useMemo(() => {
     const list = vehicle?.variants ?? [];
-    // default first; then price; then name
     return [...list].sort((a, b) => {
       if (a.isDefault !== b.isDefault) return a.isDefault ? -1 : 1;
       if (a.price !== b.price) return a.price - b.price;
@@ -110,16 +110,12 @@ export function VehicleDetailsPage() {
 
   const selectedVariant = useMemo(() => {
     if (!variants.length) return null;
-
-    // If nothing selected yet, pick default (or first)
     if (selectedVariantId == null) {
       return variants.find((x) => x.isDefault) ?? variants[0];
     }
-
     return variants.find((x) => x.id === selectedVariantId) ?? null;
   }, [variants, selectedVariantId]);
 
-  // Ensure state follows derived default once variants appear
   useEffect(() => {
     if (!variants.length) return;
     if (selectedVariantId != null) return;
@@ -128,7 +124,6 @@ export function VehicleDetailsPage() {
     setSelectedVariantId(def.id);
   }, [variants, selectedVariantId]);
 
-  // When variant changes, reset addon selection (safe default)
   useEffect(() => {
     setSelectedAddonIds([]);
   }, [selectedVariant?.id]);
@@ -150,7 +145,6 @@ export function VehicleDetailsPage() {
     (baseVariantPrice > 0 ? baseVariantPrice : vehicle?.price ?? 0) +
     (addonsTotal > 0 ? addonsTotal : 0);
 
-  // Resolve BOTH flat OR nested details
   const d = details;
   const eng = d.engine ?? {};
   const dim = d.dimensions ?? {};
@@ -201,10 +195,6 @@ export function VehicleDetailsPage() {
     return formatINR(finalPriceNumber);
   }, [finalPriceNumber]);
 
-  /* =======================
-     Data Fetch
-  ======================= */
-
   useEffect(() => {
     if (!slug) {
       setError("Missing vehicle slug.");
@@ -224,7 +214,6 @@ export function VehicleDetailsPage() {
 
         setVehicle(data);
 
-        // Select default variant (or first)
         const list = data.variants ?? [];
         if (list.length > 0) {
           const def = list.find((x) => x.isDefault) ?? list[0];
@@ -245,26 +234,17 @@ export function VehicleDetailsPage() {
     };
   }, [slug]);
 
-  /* =======================
-     Early Returns (SAFE)
-  ======================= */
-
   if (loading) return <div className="public-page">Loading vehicle…</div>;
   if (error) return <div className="public-page error">{error}</div>;
   if (!vehicle) return <div className="public-page">Vehicle not found.</div>;
 
   const v = vehicle;
-
   const hasVariants = variants.length > 0;
-
-  /* =======================
-     Render
-  ======================= */
 
   return (
     <div className="public-page">
       <div className="public-topbar">
-        <Link to="/vehicles" className="btn btn-ghost">
+        <Link to={backTo} className="btn btn-ghost">
           ← Back to catalog
         </Link>
       </div>
@@ -295,16 +275,11 @@ export function VehicleDetailsPage() {
             )}
           </div>
 
-          {/* ✅ PUBLIC Variant Selector (Pills) */}
           {hasVariants && (
             <div className="vehicle-variant-picker">
               <div className="label">Variant</div>
 
-              <div
-                className="variant-pills"
-                role="radiogroup"
-                aria-label="Select variant"
-              >
+              <div className="variant-pills" role="radiogroup" aria-label="Select variant">
                 {variants.map((x) => {
                   const active = selectedVariant?.id === x.id;
                   return (
@@ -317,15 +292,12 @@ export function VehicleDetailsPage() {
                       onClick={() => setSelectedVariantId(x.id)}
                     >
                       <span className="variant-pill-name">{x.name}</span>
-                      <span className="variant-pill-price">
-                        {formatINR(x.price)}
-                      </span>
+                      <span className="variant-pill-price">{formatINR(x.price)}</span>
                     </button>
                   );
                 })}
               </div>
 
-              {/* optional helper line (can remove anytime) */}
               <div className="variant-hint">
                 {selectedVariant?.isDefault ? "Default variant selected" : ""}
               </div>
@@ -333,11 +305,9 @@ export function VehicleDetailsPage() {
           )}
 
           <div className="vehicle-price">
-            {displayPrice}{" "}
-            <span className="price-note">Ex-showroom (approx.)</span>
+            {displayPrice} <span className="price-note">Ex-showroom (approx.)</span>
           </div>
 
-          {/* ✅ Add-on hook (renders only if addons exist) */}
           {selectedVariant && selectedVariant.addons?.length > 0 && (
             <div className="vehicle-addons">
               <div className="addons-title">Add-ons</div>
@@ -417,10 +387,7 @@ export function VehicleDetailsPage() {
           </section>
         )}
 
-        {(hasValue(engineType) ||
-          hasValue(inductionType) ||
-          hasValue(emission) ||
-          hasValue(range)) && (
+        {(hasValue(engineType) || hasValue(inductionType) || hasValue(emission) || hasValue(range)) && (
           <section className="spec-card">
             <h2>Engine</h2>
             <dl>
@@ -432,41 +399,22 @@ export function VehicleDetailsPage() {
           </section>
         )}
 
-        {(hasValue(power) ||
-          hasValue(torque) ||
-          hasValue(d.warrantyYears) ||
-          hasValue(d.serviceIntervalKm)) && (
+        {(hasValue(power) || hasValue(torque) || hasValue(d.warrantyYears) || hasValue(d.serviceIntervalKm)) && (
           <section className="spec-card">
             <h2>Performance</h2>
             <dl>
-              <Spec
-                label="Power"
-                value={powerText(power ?? null, powerRpm ?? null)}
-              />
-              <Spec
-                label="Torque"
-                value={torqueText(torque ?? null, torqueRpm ?? null)}
-              />
+              <Spec label="Power" value={powerText(power ?? null, powerRpm ?? null)} />
+              <Spec label="Torque" value={torqueText(torque ?? null, torqueRpm ?? null)} />
               <Spec
                 label="Warranty"
-                value={
-                  hasValue(d.warrantyYears) ? `${d.warrantyYears} years` : "—"
-                }
+                value={hasValue(d.warrantyYears) ? `${d.warrantyYears} years` : "—"}
               />
-              <Spec
-                label="Service interval"
-                value={unit(d.serviceIntervalKm, "km")}
-              />
+              <Spec label="Service interval" value={unit(d.serviceIntervalKm, "km")} />
             </dl>
           </section>
         )}
 
-        {(hasValue(length) ||
-          hasValue(width) ||
-          hasValue(height) ||
-          hasValue(weight) ||
-          hasValue(wheelBase) ||
-          hasValue(groundClearance)) && (
+        {(hasValue(length) || hasValue(width) || hasValue(height) || hasValue(weight) || hasValue(wheelBase) || hasValue(groundClearance)) && (
           <section className="spec-card">
             <h2>Dimensions & Weight</h2>
             <dl>
@@ -474,20 +422,13 @@ export function VehicleDetailsPage() {
               <Spec label="Width" value={unit(width, "mm")} />
               <Spec label="Height" value={unit(height, "mm")} />
               <Spec label="Wheelbase" value={unit(wheelBase, "mm")} />
-              <Spec
-                label="Ground clearance"
-                value={unit(groundClearance, "mm")}
-              />
+              <Spec label="Ground clearance" value={unit(groundClearance, "mm")} />
               <Spec label="Weight" value={unit(weight, "kg")} />
             </dl>
           </section>
         )}
 
-        {(hasValue(personCapacity) ||
-          hasValue(rows) ||
-          hasValue(doors) ||
-          hasValue(bootSpace) ||
-          hasValue(tankSize)) && (
+        {(hasValue(personCapacity) || hasValue(rows) || hasValue(doors) || hasValue(bootSpace) || hasValue(tankSize)) && (
           <section className="spec-card">
             <h2>Capacity</h2>
             <dl>
@@ -500,12 +441,7 @@ export function VehicleDetailsPage() {
           </section>
         )}
 
-        {(hasValue(frontType) ||
-          hasValue(backType) ||
-          hasValue(frontBrake) ||
-          hasValue(backBrake) ||
-          hasValue(tyreType) ||
-          hasValue(wheelMaterial)) && (
+        {(hasValue(frontType) || hasValue(backType) || hasValue(frontBrake) || hasValue(backBrake) || hasValue(tyreType) || hasValue(wheelMaterial)) && (
           <section className="spec-card">
             <h2>Tyres & Brakes</h2>
             <dl>
@@ -525,10 +461,6 @@ export function VehicleDetailsPage() {
     </div>
   );
 }
-
-/* =======================
-   Spec row
-======================= */
 
 function Spec({ label, value }: { label: string; value: string }) {
   if (value === "—") return null;

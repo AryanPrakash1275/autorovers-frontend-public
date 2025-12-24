@@ -1,7 +1,16 @@
-import { Link } from "react-router-dom";
+// src/pages/public/VehicleTypeSelectPage.tsx
+import { useNavigate } from "react-router-dom";
 import { Footer } from "../../shared/ui/Footer";
+import { setSelectedVehicleType, type VehicleType } from "../../features/vehicles/vehicleTypeStorage";
 
 export function VehicleTypeSelectPage() {
+  const nav = useNavigate();
+
+  function pick(type: VehicleType) {
+    setSelectedVehicleType(type);
+    nav(`/vehicles?type=${type}`);
+  }
+
   return (
     <div className="public-page">
       <section className="hero">
@@ -12,13 +21,29 @@ export function VehicleTypeSelectPage() {
               Pick one. You’ll see a clean, focused catalog.
             </p>
 
-            <div style={{ display: "flex", gap: 12, marginTop: 16, flexWrap: "wrap" }}>
-              <Link className="public-btn public-btn--primary" to="/vehicles?type=bike">
+            <div
+              style={{
+                display: "flex",
+                gap: 12,
+                marginTop: 16,
+                flexWrap: "wrap",
+              }}
+            >
+              <button
+                type="button"
+                className="public-btn public-btn--primary"
+                onClick={() => pick("bike")}
+              >
                 Browse Bikes
-              </Link>
-              <Link className="public-btn public-btn--ghost" to="/vehicles?type=car">
+              </button>
+
+              <button
+                type="button"
+                className="public-btn public-btn--ghost"
+                onClick={() => pick("car")}
+              >
                 Browse Cars
-              </Link>
+              </button>
             </div>
 
             <p className="public-subtitle" style={{ marginTop: 14 }}>
