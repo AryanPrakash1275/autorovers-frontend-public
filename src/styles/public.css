@@ -663,9 +663,10 @@ body.public-view {
 .bundle-price {
   margin-top: 6px;
   font-weight: 900;
-  color: var(--text);
+  color: var(--accent);
   font-size: 0.95rem;
 }
+
 
 .bundle-block {
   margin-top: 26px;
@@ -1134,8 +1135,95 @@ body.public-view {
   color: var(--accent);
 }
 
-/* Safety catch: any ₹ symbol */
-*:has(> span:contains("₹")),
-*:has(> strong:contains("₹")) {
-  color: var(--accent);
+/* ================================
+   Featured Vehicles carousel arrows (FINAL)
+   ================================ */
+
+.bundle-row-wrap {
+  display: grid;
+  grid-template-columns: 44px 1fr 44px;
+  align-items: center; /* keep arrows vertically centered */
+  gap: 12px;
+  margin-top: 14px;
+}
+
+/* allow scroll row to shrink inside grid (prevents clipping / wrapping) */
+.bundle-row-wrap > .bundle-row {
+  min-width: 0;
+}
+
+/* make the middle column row behave nicely */
+.bundle-row.bundle-row--carousel {
+  width: 100%;
+  margin-top: 0;
+  padding: 2px 4px 10px;
+
+  /* subtle premium edge fade (fixes half-cut look) */
+  mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    #000 24px,
+    #000 calc(100% - 24px),
+    transparent 100%
+  );
+  -webkit-mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    #000 24px,
+    #000 calc(100% - 24px),
+    transparent 100%
+  );
+}
+
+/* arrows */
+.bundle-arrow {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  background: rgba(15, 23, 42, 0.92);
+  color: #fff;
+  cursor: pointer;
+
+  display: grid;
+  place-items: center;
+
+  box-shadow: var(--shadow-1);
+  transition: var(--t-fast);
+  user-select: none;
+
+  /* visual centering vs cards */
+  transform: translateY(-10px);
+}
+
+.bundle-arrow:hover {
+  transform: translateY(-11px);
+  background: rgba(15, 23, 42, 1);
+}
+
+.bundle-arrow:active {
+  transform: translateY(-10px);
+}
+
+.bundle-arrow:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+  transform: translateY(-10px);
+}
+
+/* mobile: no arrows, no mask, swipe-only */
+@media (max-width: 640px) {
+  .bundle-row-wrap {
+    grid-template-columns: 1fr;
+  }
+
+  .bundle-arrow {
+    display: none;
+  }
+
+  .bundle-row.bundle-row--carousel {
+    padding: 0 0 10px;
+    mask-image: none;
+    -webkit-mask-image: none;
+  }
 }

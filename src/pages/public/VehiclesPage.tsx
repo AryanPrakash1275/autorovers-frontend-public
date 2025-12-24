@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 import type { VehicleListItem } from "../../features/vehicles/types";
@@ -103,6 +103,28 @@ export function VehiclesPage() {
   const [browseTab, setBrowseTab] = useState<BrowseTab>("brand");
 
   const [compare, setCompare] = useState(loadCompare());
+
+  // ===== Featured row carousel state =====
+  const featuredRowRef = useRef<HTMLDivElement | null>(null);
+  const [canLeft, setCanLeft] = useState(false);
+  const [canRight, setCanRight] = useState(false);
+
+  function updateArrows() {
+    const el = featuredRowRef.current;
+    if (!el) return;
+    const maxScrollLeft = el.scrollWidth - el.clientWidth;
+    setCanLeft(el.scrollLeft > 2);
+    setCanRight(el.scrollLeft < maxScrollLeft - 2);
+  }
+
+  function scrollFeatured(dir: "left" | "right") {
+    const el = featuredRowRef.current;
+    if (!el) return;
+
+    // scroll by ~one viewport width (but not insane)
+    const amount = Math.max(240, Math.floor(el.clientWidth * 0.85));
+    el.scrollBy({ left: dir === "left" ? -amount : amount, behavior: "smooth" });
+  }
 
   useEffect(() => {
     const off = onCompareChanged(setCompare);
@@ -274,6 +296,17 @@ export function VehiclesPage() {
     }
   }, [vehicles, featuredTab, bundleMeta.maxYear]);
 
+  // keep arrows accurate when list/tab changes
+  useEffect(() => {
+    setTimeout(() => updateArrows(), 0);
+  }, [featuredTab, featuredList.length]);
+
+  useEffect(() => {
+    const onResize = () => updateArrows();
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+
   const topBrands = useMemo(() => {
     const brands = vehicles.map((v) => safeStr(v.brand).trim()).filter(Boolean);
     const map = new Map<string, number>();
@@ -390,46 +423,73 @@ export function VehiclesPage() {
           </button>
         </div>
 
-        <div className="bundle-row">
-          {featuredList.map((v) => {
-            const slug = safeStr(v.slug);
-            const to =
-              slug.trim().length > 0
-                ? `/vehicles/${encodeURIComponent(slug)}`
-                : "/vehicles";
+        {/* ✅ FEATURED CAROUSEL WITH ARROWS */}
+        <div className="bundle-row-wrap">
+          <button
+            className="bundle-arrow"
+            onClick={() => scrollFeatured("left")}
+            disabled={!canLeft}
+            aria-label="Scroll left"
+            title="Scroll left"
+          >
+            ‹
+          </button>
 
-            const title =
-              `${safeStr(v.brand)} ${safeStr(v.model)}`.trim() || "Vehicle";
+          <div
+            className="bundle-row bundle-row--carousel"
+            ref={featuredRowRef}
+            onScroll={updateArrows}
+          >
+            {featuredList.map((v) => {
+              const slug = safeStr(v.slug);
+              const to =
+                slug.trim().length > 0
+                  ? `/vehicles/${encodeURIComponent(slug)}`
+                  : "/vehicles";
 
-            const priceText =
-              typeof v.price === "number" && v.price > 0
-                ? `₹ ${v.price.toLocaleString("en-IN")}`
-                : "—";
+              const title =
+                `${safeStr(v.brand)} ${safeStr(v.model)}`.trim() || "Vehicle";
 
-            return (
-              <Link key={`feat-${v.id}`} to={to} className="bundle-card vehicle-card">
-                <div className="vehicle-card-image-wrapper">
-                  <img
-                    src={safeStr(v.imageUrl) || FALLBACK_IMG}
-                    alt={title}
-                    className="vehicle-card-image"
-                    onError={(e) => {
-                      (e.currentTarget as HTMLImageElement).src = FALLBACK_IMG;
-                    }}
-                  />
-                </div>
+              const priceText =
+                typeof v.price === "number" && v.price > 0
+                  ? `₹ ${v.price.toLocaleString("en-IN")}`
+                  : "—";
 
-                <div className="vehicle-card-header">
-                  <h2 className="vehicle-card-title">{title}</h2>
-                  <p className="vehicle-card-variant">
-                    {safeStr(v.variant) || "—"}
-                  </p>
-                </div>
+              return (
+                <Link key={`feat-${v.id}`} to={to} className="bundle-card vehicle-card">
+                  <div className="vehicle-card-image-wrapper">
+                    <img
+                      src={safeStr(v.imageUrl) || FALLBACK_IMG}
+                      alt={title}
+                      className="vehicle-card-image"
+                      onError={(e) => {
+                        (e.currentTarget as HTMLImageElement).src = FALLBACK_IMG;
+                      }}
+                    />
+                  </div>
 
-                <div className="bundle-price">{priceText} onwards</div>
-              </Link>
-            );
-          })}
+                  <div className="vehicle-card-header">
+                    <h2 className="vehicle-card-title">{title}</h2>
+                    <p className="vehicle-card-variant">
+                      {safeStr(v.variant) || "—"}
+                    </p>
+                  </div>
+
+                  <div className="bundle-price">{priceText} onwards</div>
+                </Link>
+              );
+            })}
+          </div>
+
+          <button
+            className="bundle-arrow"
+            onClick={() => scrollFeatured("right")}
+            disabled={!canRight}
+            aria-label="Scroll right"
+            title="Scroll right"
+          >
+            ›
+          </button>
         </div>
 
         <div className="bundle-block">

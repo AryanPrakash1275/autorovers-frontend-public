@@ -10,106 +10,54 @@ import {
   clearCompare,
   type CompareState,
 } from "../compareState";
-import {
-  COMMON_FIELDS,
-  BIKE_FIELDS,
-  CAR_FIELDS,
-  type VehicleKind,
-} from "../comparisonFields";
 import { getPublicVehicleBySlug } from "../api";
-import type { VehicleWithDetailsDto } from "../types";
+import type { VehicleWithDetailsDto, VehicleType } from "../types";
 
-const FALLBACK_IMG =
-  "https://dummyimage.com/240x160/cccccc/000000&text=No+Image";
+import {
+  getComparisonRowsForType,
+  type ComparisonVehicle,
+} from "../comparisonContract";
+import { mapToComparisonVehicle } from "../mapToComparisonVehicle";
 
-function dash(v?: string) {
-  return v && v.trim().length ? v : "—";
-}
+/* =========================
+   Helpers
+========================= */
 
-function safeCell(v: unknown): string {
-  if (v === null || v === undefined) return "—";
-  if (typeof v === "boolean") return v ? "✓" : "—";
-  if (typeof v === "number") return Number.isFinite(v) ? String(v) : "—";
-  if (typeof v === "string") return v.trim().length ? v : "—";
-  return String(v);
-}
-
-const CAR_CATEGORIES = new Set(
-  [
-    "suv",
-    "hatchback",
-    "sedan",
-    "coupe",
-    "convertible",
-    "wagon",
-    "muv",
-    "mpv",
-    "crossover",
-    "pickup",
-    "truck",
-    "van",
-  ].map((x) => x.toLowerCase())
-);
-
-const BIKE_CATEGORIES = new Set(
-  [
-    "naked",
-    "classic",
-    "roadster",
-    "cruiser",
-    "sports",
-    "sport",
-    "adventure",
-    "scooter",
-    "commuter",
-    "tourer",
-    "cafe racer",
-    "scrambler",
-    "off-road",
-    "off road",
-  ].map((x) => x.toLowerCase())
-);
-
-function inferKindFromCategory(category?: string | null): VehicleKind | undefined {
-  const raw = (category ?? "").trim();
-  if (!raw) return undefined;
-
-  const lc = raw.toLowerCase();
-
-  if (CAR_CATEGORIES.has(lc)) return "Car";
-  if (BIKE_CATEGORIES.has(lc)) return "Bike";
-
-  if (lc.includes("suv") || lc.includes("hatch") || lc.includes("sedan")) return "Car";
-  if (lc.includes("bike") || lc.includes("scooter") || lc.includes("cruiser")) return "Bike";
-
-  return undefined;
-}
-
-function sanitizeStateFromDtos(
+function sanitizeStateFromSlugs(
   prev: CompareState,
-  cleaned: VehicleWithDetailsDto[],
-  inferred?: VehicleKind
+  keepSlugs: Set<string>,
+  lockedType?: VehicleType
 ): CompareState {
-  const keepSlugs = new Set(cleaned.map((x) => x.slug).filter(Boolean) as string[]);
-  const nextItems = prev.items.filter((x) => !!x.slug && keepSlugs.has(x.slug));
-  return { items: nextItems, vehicleType: inferred };
+  const nextItems = prev.items.filter(
+    (x) => !!x.slug && keepSlugs.has(x.slug)
+  );
+  return { items: nextItems, vehicleType: lockedType };
 }
+
+/* =========================
+   Component
+========================= */
 
 export function ComparePage() {
   const nav = useNavigate();
-
   const [compare, setCompare] = useState(loadCompare());
 
   const [loading, setLoading] = useState(true);
   const [dtos, setDtos] = useState<VehicleWithDetailsDto[]>([]);
-  const [vehicleType, setVehicleType] = useState<VehicleKind | undefined>();
+  const [vehicleType, setVehicleType] = useState<VehicleType | undefined>();
   const [err, setErr] = useState<string | null>(null);
+
+  /* =========================
+     Compare state listeners
+  ========================= */
 
   useEffect(() => {
     const off = onCompareChanged(setCompare);
 
     const onStorage = (e: StorageEvent) => {
-      if (e.key === "autorovers_compare_v1") setCompare(loadCompare());
+      if (e.key === "autorovers_compare_v1") {
+        setCompare(loadCompare());
+      }
     };
 
     window.addEventListener("storage", onStorage);
@@ -118,6 +66,10 @@ export function ComparePage() {
       window.removeEventListener("storage", onStorage);
     };
   }, []);
+
+  /* =========================
+     Actions
+  ========================= */
 
   function handleRemove(slug?: string | null) {
     if (!slug) return;
@@ -141,6 +93,10 @@ export function ComparePage() {
     nav("/vehicles");
   }
 
+  /* =========================
+     Load & validate vehicles
+  ========================= */
+
   useEffect(() => {
     let cancelled = false;
 
@@ -158,7 +114,9 @@ export function ComparePage() {
 
         const slugs = compare.items
           .map((x) => x.slug)
-          .filter((s): s is string => typeof s === "string" && s.trim().length > 0);
+          .filter(
+            (s): s is string => typeof s === "string" && s.trim().length > 0
+          );
 
         if (slugs.length < 2) {
           setDtos([]);
@@ -179,23 +137,38 @@ export function ComparePage() {
           else failedSlugs.push(slugs[idx]);
         });
 
-        const inferred = inferKindFromCategory(ok[0]?.category);
+        const publishable: VehicleWithDetailsDto[] = [];
+        const publishableSlugs = new Set<string>();
+        let lockedType: VehicleType | undefined;
 
-        const cleaned =
-          inferred === undefined
-            ? ok
-            : ok.filter((x) => inferKindFromCategory(x.category) === inferred);
+        for (const dto of ok) {
+          const mapped = mapToComparisonVehicle(dto);
+          if (!mapped.ok) continue;
+
+          const t = mapped.value.vehicleType;
+          if (!lockedType) lockedType = t;
+          if (t !== lockedType) continue;
+
+          publishable.push(dto);
+          publishableSlugs.add(mapped.value.slug);
+        }
 
         if (cancelled) return;
 
-        setDtos(cleaned);
-        setVehicleType(inferred);
+        setDtos(publishable);
+        setVehicleType(lockedType);
         setLoading(false);
 
-        // sanitize storage: remove failed slugs + mismatched category types
-        if (failedSlugs.length > 0 || cleaned.length !== ok.length) {
+        const shouldSanitize =
+          failedSlugs.length > 0 || publishable.length !== ok.length;
+
+        if (shouldSanitize) {
           setCompare((prev) => {
-            const next = sanitizeStateFromDtos(prev, cleaned, inferred);
+            const next = sanitizeStateFromSlugs(
+              prev,
+              publishableSlugs,
+              lockedType
+            );
             saveCompare(next);
             return next;
           });
@@ -214,31 +187,55 @@ export function ComparePage() {
     };
   }, [compare.items, compare.vehicleType]);
 
-  const fields = useMemo(() => {
-    if (vehicleType === "Bike") return [...COMMON_FIELDS, ...BIKE_FIELDS];
-    if (vehicleType === "Car") return [...COMMON_FIELDS, ...CAR_FIELDS];
-    return [...COMMON_FIELDS];
+  /* =========================
+     Derived data
+  ========================= */
+
+  const rows = useMemo(() => {
+    if (!vehicleType) return [];
+    return getComparisonRowsForType(vehicleType);
   }, [vehicleType]);
+
+  const mappedVehicles = useMemo((): ComparisonVehicle[] => {
+    const out: ComparisonVehicle[] = [];
+
+    for (const d of dtos) {
+      const r = mapToComparisonVehicle(d);
+      if (r.ok) out.push(r.value);
+    }
+
+    return out;
+  }, [dtos]);
+
+  /* =========================
+     Render guards
+  ========================= */
 
   if (loading) return <div className="public-page">Loading comparison…</div>;
   if (err) return <div className="public-page error">{err}</div>;
 
-  if (dtos.length < 2) {
+  if (mappedVehicles.length < 2 || !vehicleType) {
     return (
       <div className="public-page">
         <div className="compare-head">
           <div>
             <h1 className="public-title">Compare</h1>
             <p className="public-subtitle">
-              Select at least 2 vehicles of the same type to compare.
+              Select at least 2 publishable vehicles of the same type to compare.
             </p>
           </div>
 
           <div className="compare-actions">
-            <button className="public-btn public-btn--ghost" onClick={handleAddMore}>
+            <button
+              className="public-btn public-btn--ghost"
+              onClick={handleAddMore}
+            >
               Add vehicles
             </button>
-            <button className="public-btn public-btn--danger" onClick={handleClearAll}>
+            <button
+              className="public-btn public-btn--danger"
+              onClick={handleClearAll}
+            >
               Clear
             </button>
           </div>
@@ -246,7 +243,7 @@ export function ComparePage() {
 
         <div className="empty-state">
           <p className="muted">
-            Your compare list is empty (or has only 1 vehicle).
+            Your compare list is empty (or has only 1 publishable vehicle).
           </p>
           <Link className="public-btn public-btn--primary" to="/vehicles">
             Browse vehicles
@@ -256,21 +253,31 @@ export function ComparePage() {
     );
   }
 
+  /* =========================
+     Table
+  ========================= */
+
   return (
     <div className="public-page">
       <div className="compare-head">
         <div>
           <h1 className="public-title">Compare</h1>
           <p className="public-subtitle">
-            Comparing {dtos.length} {vehicleType ?? "vehicles"}
+            Comparing {mappedVehicles.length} {vehicleType}
           </p>
         </div>
 
         <div className="compare-actions">
-          <button className="public-btn public-btn--ghost" onClick={handleAddMore}>
+          <button
+            className="public-btn public-btn--ghost"
+            onClick={handleAddMore}
+          >
             Add more
           </button>
-          <button className="public-btn public-btn--danger" onClick={handleClearAll}>
+          <button
+            className="public-btn public-btn--danger"
+            onClick={handleClearAll}
+          >
             Clear all
           </button>
         </div>
@@ -282,75 +289,57 @@ export function ComparePage() {
             <tr>
               <th className="compare-spec">Spec</th>
 
-              {dtos.map((v) => {
-                const brand = dash(v.brand);
-                const model = dash(v.model);
-                const variant = dash(v.variant);
-                const img = v.imageUrl?.trim() ? v.imageUrl : FALLBACK_IMG;
+              {mappedVehicles.map((v) => (
+                <th key={v.id} className="compare-col">
+                  <div className="compare-vehicle">
+                    <div className="compare-vehicle-top">
+                      <img
+                        src={v.imageUrl}
+                        alt={`${v.brand} ${v.model}`}
+                        className="compare-img"
+                      />
 
-                return (
-                  <th key={v.id} className="compare-col">
-                    <div className="compare-vehicle">
-                      <div className="compare-vehicle-top">
-                        <img
-                          src={img}
-                          alt={`${brand} ${model}`}
-                          className="compare-img"
-                          onError={(e) => {
-                            e.currentTarget.src = FALLBACK_IMG;
-                          }}
-                        />
-
-                        <div className="compare-title">
-                          <div className="compare-name">
-                            {brand} {model}
-                          </div>
-                          {variant !== "—" && <div className="compare-variant">{variant}</div>}
-                          <div className="compare-meta">
-                            <span>{v.year ?? "—"}</span>
-                            <span>·</span>
-                            <span>{v.category ?? "—"}</span>
-                          </div>
+                      <div className="compare-title">
+                        <div className="compare-name">
+                          {v.brand} {v.model}
+                        </div>
+                        <div className="compare-variant">{v.variant}</div>
+                        <div className="compare-meta">
+                          <span>{v.year}</span>
+                          <span>·</span>
+                          <span>{v.category}</span>
                         </div>
                       </div>
-
-                      <div className="compare-vehicle-actions">
-                        {v.slug ? (
-                          <Link
-                            className="public-btn public-btn--ghost"
-                            to={`/vehicles/${encodeURIComponent(v.slug)}`}
-                          >
-                            View
-                          </Link>
-                        ) : (
-                          <button className="public-btn public-btn--ghost" disabled>
-                            View
-                          </button>
-                        )}
-
-                        <button
-                          className="public-btn public-btn--danger"
-                          onClick={() => handleRemove(v.slug)}
-                        >
-                          Remove
-                        </button>
-                      </div>
                     </div>
-                  </th>
-                );
-              })}
+
+                    <div className="compare-vehicle-actions">
+                      <Link
+                        className="public-btn public-btn--ghost"
+                        to={`/vehicles/${encodeURIComponent(v.slug)}`}
+                      >
+                        View
+                      </Link>
+
+                      <button
+                        className="public-btn public-btn--danger"
+                        onClick={() => handleRemove(v.slug)}
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  </div>
+                </th>
+              ))}
             </tr>
           </thead>
 
           <tbody>
-            {fields.map((f) => (
-              <tr key={f.key}>
-                <td className="compare-spec-cell">{f.label}</td>
-                {dtos.map((v) => {
-                  const raw = f.get(v);
-                  const cell = f.format ? f.format(raw) : safeCell(raw);
-                  return <td key={`${v.id}-${f.key}`}>{cell}</td>;
-                })}
+            {rows.map((row) => (
+              <tr key={row.key}>
+                <td className="compare-spec-cell">{row.label}</td>
+                {mappedVehicles.map((v) => (
+                  <td key={`${v.id}-${row.key}`}>{row.get(v)}</td>
+                ))}
               </tr>
             ))}
           </tbody>
