@@ -1,7 +1,7 @@
 // src/features/vehicles/pages/ComparePage.tsx
 
-import { useEffect, useMemo, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 
 import {
   loadCompare,
@@ -11,15 +11,62 @@ import {
   type CompareState,
 } from "../compareState";
 import { getPublicVehicleBySlug } from "../api";
-import type { VehicleWithDetailsDto, VehicleType } from "../types";
+import type { VehicleWithDetailsDto, VehicleType, VehicleListItem } from "../types";
 
-import { getComparisonRowsForType, type ComparisonVehicle } from "../comparisonContract";
+import {
+  getComparisonRowsForType,
+  type ComparisonVehicle,
+} from "../comparisonContract";
 import { mapToComparisonVehicle } from "../mapToComparisonVehicle";
 import {
   getSelectedVehicleType,
-  onVehicleTypeChanged,
   type VehicleType as StoredVehicleType,
 } from "../vehicleTypeStorage";
+
+/* =========================
+   URL helpers
+========================= */
+
+const QS_KEY = "slugs";
+
+function normalizeSlug(s: unknown): string | null {
+  if (typeof s !== "string") return null;
+  const t = s.trim();
+  return t.length ? t : null;
+}
+
+function encodeSlugs(slugs: string[]): string {
+  return slugs.map((s) => encodeURIComponent(s)).join(",");
+}
+
+function decodeSlugs(raw: string | null): string[] {
+  if (!raw) return [];
+  return raw
+    .split(",")
+    .map((x) => {
+      try {
+        return decodeURIComponent(x);
+      } catch {
+        return x;
+      }
+    })
+    .map((x) => x.trim())
+    .filter(Boolean);
+}
+
+function uniqMax4(slugs: string[]): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const s of slugs) {
+    const n = normalizeSlug(s);
+    if (!n) continue;
+    if (seen.has(n)) continue;
+    seen.add(n);
+    out.push(n);
+    if (out.length >= 4) break;
+  }
+  return out;
+}
 
 /* =========================
    Helpers
@@ -37,6 +84,8 @@ function sanitizeStateFromSlugs(
 
 export function ComparePage() {
   const nav = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+
   const [compare, setCompare] = useState(loadCompare());
 
   const [loading, setLoading] = useState(true);
@@ -44,13 +93,30 @@ export function ComparePage() {
   const [vehicleType, setVehicleType] = useState<VehicleType | undefined>();
   const [err, setErr] = useState<string | null>(null);
 
-  // ✅ reactive selected type (so Browse/Add-more always correct)
+  // ✅ reactive selected type (Browse/Add-more always correct)
   const [selectedType, setSelectedType] = useState<StoredVehicleType | undefined>(() =>
     getSelectedVehicleType()
   );
 
+  // prevent URL<->state infinite loops
+  const urlHydratedOnce = useRef(false);
+  const lastUrlSlugs = useRef<string>("");
+
   useEffect(() => {
-    return onVehicleTypeChanged(setSelectedType);
+    const sync = () => setSelectedType(getSelectedVehicleType());
+
+    window.addEventListener("focus", sync);
+
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === "autorovers_vehicle_type_v1") sync();
+      if (e.key === "autorovers_compare_v1") setCompare(loadCompare());
+    };
+
+    window.addEventListener("storage", onStorage);
+    return () => {
+      window.removeEventListener("focus", sync);
+      window.removeEventListener("storage", onStorage);
+    };
   }, []);
 
   useEffect(() => {
@@ -66,21 +132,100 @@ export function ComparePage() {
     const cur = loadCompare();
     const nextItems = cur.items.filter((x) => x.slug !== slug);
 
-    const next: CompareState = nextItems.length === 0 ? { items: [] } : { ...cur, items: nextItems };
+    const next: CompareState =
+      nextItems.length === 0 ? { items: [] } : { ...cur, items: nextItems };
 
     saveCompare(next);
-    setCompare(next);
+    // NOTE: saveCompare emits same-tab event → onCompareChanged updates state.
+    // setCompare(next); // not required
   }
 
   function handleClearAll() {
-    const next = clearCompare();
-    setCompare(next);
+    clearCompare();
+    // same-tab event updates state
   }
 
   function handleAddMore() {
     nav(browseTo);
   }
 
+  /* =====================================================
+     (0) Stable slug key for effects
+     - keeps deps tight
+     - prevents URL loops on id patches / reorder
+  ===================================================== */
+  const compareSlugKey = useMemo(() => {
+    const slugs = uniqMax4(
+      compare.items.map((x) => normalizeSlug(x.slug)).filter(Boolean) as string[]
+    );
+    // Use a delimiter that will never appear in slugs
+    return slugs.join("|");
+  }, [compare.items]);
+
+  /* =====================================================
+     (1) URL -> Compare hydration
+     /compare?slugs=a,b,c loads those once
+  ===================================================== */
+  useEffect(() => {
+    if (urlHydratedOnce.current) return;
+
+    const raw = searchParams.get(QS_KEY);
+    const slugsFromUrl = uniqMax4(decodeSlugs(raw));
+
+    lastUrlSlugs.current = encodeSlugs(slugsFromUrl);
+
+    // URL doesn't specify enough slugs → let localStorage drive
+    if (slugsFromUrl.length < 2) {
+      urlHydratedOnce.current = true;
+      return;
+    }
+
+    // minimal objects (only slug needed initially)
+    const minimalItems: VehicleListItem[] = slugsFromUrl.map(
+      (s) => ({ id: 0, slug: s } as unknown as VehicleListItem)
+    );
+
+    const next: CompareState = { items: minimalItems };
+
+    // ✅ no setState inside effect needed:
+    // saveCompare emits same-tab event → our onCompareChanged listener will setCompare.
+    saveCompare(next);
+
+    urlHydratedOnce.current = true;
+  }, [searchParams]);
+
+  /* =====================================================
+     (2) Compare -> URL (always shareable)
+     IMPORTANT:
+     - driven ONLY by compareSlugKey to avoid loops
+     - uses functional setSearchParams so we don't depend on searchParams
+  ===================================================== */
+  useEffect(() => {
+    const slugs = compareSlugKey ? compareSlugKey.split("|") : [];
+    const encoded = encodeSlugs(slugs);
+
+    if (encoded === lastUrlSlugs.current) return;
+    lastUrlSlugs.current = encoded;
+
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+
+        if (slugs.length < 2) {
+          next.delete(QS_KEY);
+          return next;
+        }
+
+        next.set(QS_KEY, encoded);
+        return next;
+      },
+      { replace: true }
+    );
+  }, [compareSlugKey, setSearchParams]);
+
+  /* =====================================================
+     (3) Load DTOs from compare state
+  ===================================================== */
   useEffect(() => {
     let cancelled = false;
 
@@ -96,9 +241,11 @@ export function ComparePage() {
           return;
         }
 
-        const slugs = compare.items
-          .map((x) => x.slug)
-          .filter((s): s is string => typeof s === "string" && s.trim().length > 0);
+        const slugs = uniqMax4(
+          compare.items
+            .map((x) => x.slug)
+            .filter((s): s is string => typeof s === "string" && s.trim().length > 0)
+        );
 
         if (slugs.length < 2) {
           setDtos([]);
@@ -107,7 +254,9 @@ export function ComparePage() {
           return;
         }
 
-        const settled = await Promise.allSettled(slugs.map((slug) => getPublicVehicleBySlug(slug)));
+        const settled = await Promise.allSettled(
+          slugs.map((slug) => getPublicVehicleBySlug(slug))
+        );
 
         const ok: VehicleWithDetailsDto[] = [];
         const failedSlugs: string[] = [];
@@ -155,14 +304,29 @@ export function ComparePage() {
         setVehicleType(lockedType);
         setLoading(false);
 
-        const shouldSanitize = failedSlugs.length > 0 || publishable.length !== ok.length;
+        const shouldSanitize =
+          failedSlugs.length > 0 || publishable.length !== ok.length;
 
         if (shouldSanitize) {
-          setCompare((prev) => {
-            const next = sanitizeStateFromSlugs(prev, publishableSlugs, lockedType);
-            saveCompare(next);
-            return next;
+          // sanitize storage + state once
+          const prev = loadCompare();
+          const next = sanitizeStateFromSlugs(prev, publishableSlugs, lockedType);
+
+          // patch ids from fetched DTOs (optional but helps keys / remove buttons)
+          const idBySlug = new Map<string, number>();
+          for (const d of publishable) {
+            if (typeof d.slug === "string" && typeof d.id === "number") {
+              idBySlug.set(d.slug, d.id);
+            }
+          }
+
+          next.items = next.items.map((it) => {
+            const s = typeof it.slug === "string" ? it.slug : "";
+            const id = idBySlug.get(s);
+            return id ? { ...it, id } : it;
           });
+
+          saveCompare(next); // emits event → setCompare
         }
       } catch (e: unknown) {
         if (!cancelled) {
