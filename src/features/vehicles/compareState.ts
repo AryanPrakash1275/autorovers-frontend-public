@@ -6,7 +6,7 @@ const KEY = "autorovers_compare_v1";
 const EVENT_NAME = "autorovers:compare_changed";
 
 export type CompareState = {
-  vehicleType?: string; // "Bike" | "Car"
+  vehicleType?: "Bike" | "Car"; // ✅ canonical
   items: VehicleListItem[];
 };
 
@@ -14,6 +14,13 @@ type Obj = Record<string, unknown>;
 
 function readString(v: unknown): string | undefined {
   return typeof v === "string" && v.trim().length ? v.trim() : undefined;
+}
+
+function normType(v: unknown): "Bike" | "Car" | undefined {
+  const s = readString(v)?.toLowerCase();
+  if (s === "bike") return "Bike";
+  if (s === "car") return "Car";
+  return undefined;
 }
 
 /* =========================
@@ -34,6 +41,7 @@ const CAR_CATEGORIES = new Set(
     "pickup",
     "truck",
     "van",
+    "ev car",
   ].map((x) => x.toLowerCase())
 );
 
@@ -53,10 +61,11 @@ const BIKE_CATEGORIES = new Set(
     "scrambler",
     "off-road",
     "off road",
+    "ev bike",
   ].map((x) => x.toLowerCase())
 );
 
-function inferTypeFromCategory(category?: string): string | undefined {
+function inferTypeFromCategory(category?: string): "Bike" | "Car" | undefined {
   const raw = (category ?? "").trim();
   if (!raw) return undefined;
 
@@ -76,18 +85,20 @@ function inferTypeFromCategory(category?: string): string | undefined {
    Public helpers
    ========================= */
 
-export function getCompareVehicleType(row: VehicleListItem): string | undefined {
+export function getCompareVehicleType(row: VehicleListItem): "Bike" | "Car" | undefined {
   const o = row as unknown as Obj;
 
-  const vt = readString(o["vehicleType"]);
+  // prefer explicit signals
+  const vt = normType(o["vehicleType"]);
   if (vt) return vt;
 
-  const kind = readString(o["kind"]);
+  const kind = normType(o["kind"]);
   if (kind) return kind;
 
-  const type = readString(o["type"]);
+  const type = normType(o["type"]);
   if (type) return type;
 
+  // fallback to category
   const cat = readString(o["category"]);
   return inferTypeFromCategory(cat);
 }
@@ -117,14 +128,10 @@ export function saveCompare(state: CompareState) {
   localStorage.setItem(KEY, JSON.stringify(state));
 
   // ✅ same-tab reactivity
-  window.dispatchEvent(
-    new CustomEvent(EVENT_NAME, { detail: state })
-  );
+  window.dispatchEvent(new CustomEvent(EVENT_NAME, { detail: state }));
 }
 
-export function onCompareChanged(
-  cb: (state: CompareState) => void
-): () => void {
+export function onCompareChanged(cb: (state: CompareState) => void): () => void {
   const handler = (e: Event) => {
     const ce = e as CustomEvent<CompareState>;
     cb(ce.detail ?? loadCompare());
@@ -134,10 +141,7 @@ export function onCompareChanged(
   return () => window.removeEventListener(EVENT_NAME, handler);
 }
 
-export function toggleCompare(
-  state: CompareState,
-  vehicle: VehicleListItem
-): CompareState {
+export function toggleCompare(state: CompareState, vehicle: VehicleListItem): CompareState {
   const exists = state.items.some((v) => v.id === vehicle.id);
 
   // remove
@@ -163,9 +167,7 @@ export function toggleCompare(
     return next;
   }
 
-  const lockedType =
-    state.vehicleType ?? getCompareVehicleType(state.items[0]);
-
+  const lockedType = state.vehicleType ?? getCompareVehicleType(state.items[0]);
   if (!lockedType || incomingType !== lockedType) return state;
 
   const next: CompareState = {

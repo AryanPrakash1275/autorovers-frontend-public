@@ -1,4 +1,9 @@
 // src/pages/public/VehiclesPage.tsx
+// FULL FILE — Block C (typed browsing) + safe vehicleType handling + compare stays stable
+// ✅ Uses selectedType ("bike" | "car") from URL/storage
+// ✅ Filters EVERYTHING from typedVehicles (never mixed list)
+// ✅ Accepts backend "Bike"/"Car" OR "bike"/"car" in rows
+// ✅ Keeps URL/storage in sync (single source of truth)
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
@@ -20,8 +25,8 @@ import {
 } from "../../features/vehicles/vehicleTypeStorage";
 
 const BIKE_CATEGORIES = new Set(
-  ["Sport", "Commuter", "Cruiser", "Tourer", "Off-road", "Scooter", "EV Bike"].map(
-    (x) => x.toLowerCase()
+  ["Sport", "Commuter", "Cruiser", "Tourer", "Off-road", "Scooter", "EV Bike"].map((x) =>
+    x.toLowerCase()
   )
 );
 
@@ -83,6 +88,7 @@ function norm(v: unknown) {
   return typeof v === "string" ? v.trim().toLowerCase() : "";
 }
 
+// ✅ Accept backend "Bike"/"Car" and also "bike"/"car"
 function toSelectedTypeFromVehicleType(vt: unknown): VehicleType | undefined {
   const t = norm(vt);
   if (t === "bike") return "bike";
@@ -167,8 +173,7 @@ export function VehiclesPage() {
     setCategory(selectedType === "bike" ? "bike" : "car");
   }, [selectedType]);
 
-  // ✅ THIS is Block C core:
-  // Everything on page uses typedVehicles (never raw mixed list)
+  // ✅ Block C: everything uses typedVehicles (never raw mixed list)
   const typedVehicles = useMemo(() => {
     if (!selectedType) return [];
     return vehicles.filter((v) => getSelectedTypeForRow(v) === selectedType);
@@ -298,12 +303,7 @@ export function VehiclesPage() {
         const model = safeStr(v.model).toLowerCase();
         const variant = safeStr(v.variant).toLowerCase();
         const cat = safeStr(v.category).toLowerCase();
-        return (
-          brand.includes(s) ||
-          model.includes(s) ||
-          variant.includes(s) ||
-          cat.includes(s)
-        );
+        return brand.includes(s) || model.includes(s) || variant.includes(s) || cat.includes(s);
       });
     }
 
@@ -502,9 +502,7 @@ export function VehiclesPage() {
             {featuredList.map((v) => {
               const slug = safeStr(v.slug);
               const to =
-                slug.trim().length > 0
-                  ? `/vehicles/${encodeURIComponent(slug)}`
-                  : "/vehicles";
+                slug.trim().length > 0 ? `/vehicles/${encodeURIComponent(slug)}` : "/vehicles";
 
               const title = `${safeStr(v.brand)} ${safeStr(v.model)}`.trim() || "Vehicle";
 
@@ -722,9 +720,7 @@ export function VehiclesPage() {
           {filteredVehicles.map((v) => {
             const slug = safeStr(v.slug);
             const to =
-              slug.trim().length > 0
-                ? `/vehicles/${encodeURIComponent(slug)}`
-                : "/vehicles";
+              slug.trim().length > 0 ? `/vehicles/${encodeURIComponent(slug)}` : "/vehicles";
 
             const priceText =
               typeof v.price === "number" && v.price > 0
@@ -766,9 +762,7 @@ export function VehiclesPage() {
 
                 <div style={{ marginTop: 10 }}>
                   <button
-                    className={`public-btn ${
-                      selected ? "public-btn--danger" : "public-btn--primary"
-                    }`}
+                    className={`public-btn ${selected ? "public-btn--danger" : "public-btn--primary"}`}
                     style={{ width: "100%" }}
                     disabled={!canCompare}
                     onClick={(e) => {
