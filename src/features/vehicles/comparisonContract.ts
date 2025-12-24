@@ -2,11 +2,13 @@
 
 import type { VehicleType } from "./types";
 
-export type ComparisonVehicle = {
+/* =========================
+   Core Types (DISCRIMINATED UNION)
+========================= */
+
+type ComparisonBase = {
   id: number;
   slug: string;
-
-  vehicleType: VehicleType; // locked: Bike | Car
 
   // header display (not part of 12 rows)
   brand: string;
@@ -17,10 +19,8 @@ export type ComparisonVehicle = {
   imageUrl: string;
 
   // =========================
-  // 🔒 Frozen 12 fields
+  // 🔒 Frozen shared 8 fields
   // =========================
-
-  // Shared (8)
   price: number; // ex-showroom
   mileageOrRange: number; // ICE mileage OR EV range
   power: number;
@@ -29,15 +29,31 @@ export type ComparisonVehicle = {
   powertrain: "Petrol" | "Diesel" | "EV" | "Hybrid";
   warrantyYears: number;
   serviceIntervalKm: number;
-
-  // Bike-only (2)
-  kerbWeightKg?: number;
-  fuelTankCapacityL?: number;
-
-  // Car-only (2)
-  bodyType?: string; // deterministic: from category
-  bootSpaceL?: number;
 };
+
+export function dashIfZero(v: unknown): string {
+  return typeof v === "number" && Number.isFinite(v) && v > 0 ? String(v) : "—";
+}
+
+export type ComparisonBike = ComparisonBase & {
+  vehicleType: "Bike";
+  // Bike-only (2)
+  kerbWeightKg: number;
+  fuelTankCapacityL: number;
+};
+
+export type ComparisonCar = ComparisonBase & {
+  vehicleType: "Car";
+  // Car-only (2)
+  bodyType: string; // deterministic: from category
+  bootSpaceL: number;
+};
+
+export type ComparisonVehicle = ComparisonBike | ComparisonCar;
+
+/* =========================
+   Row rendering contract
+========================= */
 
 export type ComparisonFieldKey =
   | "price"
@@ -60,12 +76,11 @@ export type ComparisonFieldRow = {
 };
 
 function fmtMoneyINR(n: number): string {
-  // keep simple + deterministic (no locale surprises)
-  return `₹${Math.round(n).toString()}`;
+  return `₹ ${Math.round(n).toLocaleString("en-IN")}`;
 }
 
 function fmtNum(n: number): string {
-  return `${Math.round(n).toString()}`;
+  return `${Math.round(n).toLocaleString("en-IN")}`;
 }
 
 function fmtOneDecimal(n: number): string {
@@ -103,12 +118,13 @@ export const COMPARISON_FIELDS_BIKE: ComparisonFieldRow[] = [
   {
     key: "kerbWeightKg",
     label: "Kerb Weight",
-    get: (v) => `${fmtNum(v.kerbWeightKg!)} kg`,
+    get: (v) => (v.vehicleType === "Bike" ? `${fmtNum(v.kerbWeightKg)} kg` : "—"),
   },
   {
     key: "fuelTankCapacityL",
     label: "Fuel Tank Capacity",
-    get: (v) => `${fmtOneDecimal(v.fuelTankCapacityL!)} L`,
+    get: (v) =>
+      v.vehicleType === "Bike" ? `${fmtOneDecimal(v.fuelTankCapacityL)} L` : "—",
   },
 ];
 
@@ -116,12 +132,12 @@ export const COMPARISON_FIELDS_CAR: ComparisonFieldRow[] = [
   {
     key: "bodyType",
     label: "Body Type",
-    get: (v) => v.bodyType!,
+    get: (v) => (v.vehicleType === "Car" ? v.bodyType : "—"),
   },
   {
     key: "bootSpaceL",
     label: "Boot Space",
-    get: (v) => `${fmtNum(v.bootSpaceL!)} L`,
+    get: (v) => (v.vehicleType === "Car" ? `${fmtNum(v.bootSpaceL)} L` : "—"),
   },
 ];
 
@@ -132,10 +148,10 @@ export function getComparisonRowsForType(vehicleType: VehicleType): ComparisonFi
   return [...COMPARISON_FIELDS_SHARED, ...COMPARISON_FIELDS_CAR];
 }
 
-/**
- * Hard guard: comparison must be built only from publishable decision-grade DTOs.
- * We enforce "no optional fields" by failing mapping if anything is missing.
- */
+/* =========================
+   Strict mapping helpers
+========================= */
+
 export type ComparisonMapResult =
   | { ok: true; value: ComparisonVehicle }
   | { ok: false; reason: string };
@@ -148,12 +164,36 @@ export function inferTypeFromCategory(category?: string | null): VehicleType | u
   const raw = (category ?? "").trim().toLowerCase();
   if (!raw) return undefined;
 
-  const car = new Set(
-    ["suv", "hatchback", "sedan", "coupe", "convertible", "wagon", "muv", "mpv", "crossover", "pickup", "truck", "van"]
-  );
-  const bike = new Set(
-    ["naked", "classic", "roadster", "cruiser", "sports", "sport", "adventure", "scooter", "commuter", "tourer", "cafe racer", "scrambler", "off-road", "off road"]
-  );
+  const car = new Set([
+    "suv",
+    "hatchback",
+    "sedan",
+    "coupe",
+    "convertible",
+    "wagon",
+    "muv",
+    "mpv",
+    "crossover",
+    "pickup",
+    "truck",
+    "van",
+  ]);
+  const bike = new Set([
+    "naked",
+    "classic",
+    "roadster",
+    "cruiser",
+    "sports",
+    "sport",
+    "adventure",
+    "scooter",
+    "commuter",
+    "tourer",
+    "cafe racer",
+    "scrambler",
+    "off-road",
+    "off road",
+  ]);
 
   if (car.has(raw)) return "Car";
   if (bike.has(raw)) return "Bike";
@@ -177,6 +217,8 @@ export function requiredStr(v: unknown, field: string): string {
 }
 
 export function requiredNum(v: unknown, field: string): number {
-  if (typeof v !== "number" || !Number.isFinite(v) || v <= 0) throw new Error(`Missing ${field}`);
+  if (typeof v !== "number" || !Number.isFinite(v) || v <= 0) {
+    throw new Error(`Missing ${field}`);
+  }
   return v;
 }

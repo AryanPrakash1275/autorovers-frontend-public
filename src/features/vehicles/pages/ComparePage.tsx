@@ -28,9 +28,7 @@ function sanitizeStateFromSlugs(
   keepSlugs: Set<string>,
   lockedType?: VehicleType
 ): CompareState {
-  const nextItems = prev.items.filter(
-    (x) => !!x.slug && keepSlugs.has(x.slug)
-  );
+  const nextItems = prev.items.filter((x) => !!x.slug && keepSlugs.has(x.slug));
   return { items: nextItems, vehicleType: lockedType };
 }
 
@@ -143,11 +141,28 @@ export function ComparePage() {
 
         for (const dto of ok) {
           const mapped = mapToComparisonVehicle(dto);
-          if (!mapped.ok) continue;
+
+          // ✅ DEBUG: print exactly why something is dropped
+          if (!mapped.ok) {
+            console.warn(
+              `NOT PUBLISHABLE | slug=${String(dto.slug)} | reason=${mapped.reason} | type=${String(dto.vehicleType)} | cat=${String(dto.category)}`
+            );
+            console.warn("details:", dto.details);
+            continue;
+          }
 
           const t = mapped.value.vehicleType;
+
           if (!lockedType) lockedType = t;
-          if (t !== lockedType) continue;
+
+          if (t !== lockedType) {
+            console.warn("TYPE MISMATCH DROP:", {
+              slug: mapped.value.slug,
+              got: t,
+              locked: lockedType,
+            });
+            continue;
+          }
 
           publishable.push(dto);
           publishableSlugs.add(mapped.value.slug);

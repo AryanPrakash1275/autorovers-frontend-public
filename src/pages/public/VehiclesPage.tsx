@@ -1,3 +1,5 @@
+// src/pages/public/VehiclesPage.tsx
+
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
@@ -11,24 +13,15 @@ import {
 } from "../../features/vehicles/compareState";
 import { Footer } from "../../shared/ui/Footer";
 
-const BIKE_CATEGORIES = new Set([
-  "Sport",
-  "Commuter",
-  "Cruiser",
-  "Tourer",
-  "Off-road",
-  "Scooter",
-  "EV Bike",
-]);
+const BIKE_CATEGORIES = new Set(
+  ["Sport", "Commuter", "Cruiser", "Tourer", "Off-road", "Scooter", "EV Bike"].map(
+    (x) => x.toLowerCase()
+  )
+);
 
-const CAR_CATEGORIES = new Set([
-  "Hatchback",
-  "Sedan",
-  "SUV",
-  "MUV",
-  "Coupe",
-  "EV Car",
-]);
+const CAR_CATEGORIES = new Set(
+  ["Hatchback", "Sedan", "SUV", "MUV", "Coupe", "EV Car"].map((x) => x.toLowerCase())
+);
 
 type CategoryFilter = "all" | "bike" | "car";
 type SortBy = "priceAsc" | "priceDesc" | "yearAsc" | "yearDesc";
@@ -41,6 +34,10 @@ const HERO_IMG =
   "https://images.pexels.com/photos/100654/pexels-photo-100654.jpeg?auto=compress&cs=tinysrgb&w=1600";
 const FALLBACK_IMG =
   "https://dummyimage.com/600x400/cccccc/000000&text=No+Image";
+
+/* =========================
+   Safe helpers
+========================= */
 
 function safeStr(v: unknown) {
   return typeof v === "string" ? v : "";
@@ -72,20 +69,42 @@ function roundToNearest(n: number, step: number) {
   return Math.round(n / step) * step;
 }
 
-function isBikeCategory(catRaw: unknown) {
-  const cat = safeStr(catRaw).trim();
-  return cat.length > 0 && BIKE_CATEGORIES.has(cat);
+/* =========================
+   HUMAN TYPE INFERENCE (FIX)
+   Use vehicleType first; fallback to category inference
+========================= */
+
+function norm(v: unknown) {
+  return typeof v === "string" ? v.trim().toLowerCase() : "";
 }
 
-function isCarCategory(catRaw: unknown) {
-  const cat = safeStr(catRaw).trim();
-  return cat.length > 0 && CAR_CATEGORIES.has(cat);
+function asVehicleType(v: unknown): "Bike" | "Car" | undefined {
+  const t = norm(v);
+  if (t === "bike") return "Bike";
+  if (t === "car") return "Car";
+  return undefined;
+}
+
+function inferTypeFromCategory(catRaw: unknown): "Bike" | "Car" | undefined {
+  const c = norm(catRaw);
+  if (!c) return undefined;
+  if (BIKE_CATEGORIES.has(c)) return "Bike";
+  if (CAR_CATEGORIES.has(c)) return "Car";
+  return undefined;
+}
+
+function getType(v: VehicleListItem): "Bike" | "Car" | undefined {
+  return asVehicleType(v.vehicleType) ?? inferTypeFromCategory(v.category);
 }
 
 function isEvVehicle(v: VehicleListItem) {
-  const cat = safeStr(v.category).toLowerCase();
-  return cat.startsWith("ev") || cat.includes("ev ");
+  const c = norm(v.category);
+  return c.startsWith("ev") || c.includes(" ev") || c.includes("electric");
 }
+
+/* =========================
+   Page
+========================= */
 
 export function VehiclesPage() {
   const nav = useNavigate();
@@ -208,11 +227,9 @@ export function VehiclesPage() {
       case "ev":
         return (v: VehicleListItem) => isEvVehicle(v);
       case "suv":
-        return (v: VehicleListItem) =>
-          safeStr(v.category).trim().toLowerCase() === "suv";
+        return (v: VehicleListItem) => norm(v.category) === "suv";
       case "commuter":
-        return (v: VehicleListItem) =>
-          safeStr(v.category).trim().toLowerCase() === "commuter";
+        return (v: VehicleListItem) => norm(v.category) === "commuter";
       default:
         return () => true;
     }
@@ -237,10 +254,11 @@ export function VehiclesPage() {
       });
     }
 
+    // ✅ HUMAN category filter: uses vehicleType first, fallback to category inference
     if (category === "bike") {
-      list = list.filter((v) => !!v.category && isBikeCategory(v.category));
+      list = list.filter((v) => getType(v) === "Bike");
     } else if (category === "car") {
-      list = list.filter((v) => !!v.category && isCarCategory(v.category));
+      list = list.filter((v) => getType(v) === "Car");
     }
 
     const sorted = [...list];
@@ -271,9 +289,7 @@ export function VehiclesPage() {
      Featured section (BikeWale-style)
      ========================= */
   const featuredList = useMemo(() => {
-    const base = vehicles.filter(
-      (v) => safeNum(v.price) > 0 && safeNum(v.year) > 0
-    );
+    const base = vehicles.filter((v) => safeNum(v.price) > 0 && safeNum(v.year) > 0);
 
     const newest = [...base].sort((a, b) => safeNum(b.year) - safeNum(a.year));
     const cheapestRecent = [...base]
@@ -364,12 +380,8 @@ export function VehiclesPage() {
 
         <div className="hero-layer">
           <div className="hero-copy">
-            <h1 className="hero-title">
-              A clean, specs-first catalog for bikes and cars.
-            </h1>
-            <p className="hero-tagline">
-              Structured data. Real variants. Fast comparisons.
-            </p>
+            <h1 className="hero-title">A clean, specs-first catalog for bikes and cars.</h1>
+            <p className="hero-tagline">Structured data. Real variants. Fast comparisons.</p>
             <p className="hero-subtext">
               Designed for clarity, consistency, and usability across devices.
             </p>
@@ -447,8 +459,7 @@ export function VehiclesPage() {
                   ? `/vehicles/${encodeURIComponent(slug)}`
                   : "/vehicles";
 
-              const title =
-                `${safeStr(v.brand)} ${safeStr(v.model)}`.trim() || "Vehicle";
+              const title = `${safeStr(v.brand)} ${safeStr(v.model)}`.trim() || "Vehicle";
 
               const priceText =
                 typeof v.price === "number" && v.price > 0
@@ -470,9 +481,7 @@ export function VehiclesPage() {
 
                   <div className="vehicle-card-header">
                     <h2 className="vehicle-card-title">{title}</h2>
-                    <p className="vehicle-card-variant">
-                      {safeStr(v.variant) || "—"}
-                    </p>
+                    <p className="vehicle-card-variant">{safeStr(v.variant) || "—"}</p>
                   </div>
 
                   <div className="bundle-price">{priceText} onwards</div>
@@ -647,12 +656,10 @@ export function VehiclesPage() {
                 ? `Starting from ₹ ${v.price.toLocaleString("en-IN")}`
                 : "Price unavailable";
 
-            const title =
-              `${safeStr(v.brand)} ${safeStr(v.model)}`.trim() || "Vehicle";
+            const title = `${safeStr(v.brand)} ${safeStr(v.model)}`.trim() || "Vehicle";
 
             const selected = isCompared(v.id);
-            const canCompare =
-              typeof v.slug === "string" && v.slug.trim().length > 0;
+            const canCompare = typeof v.slug === "string" && v.slug.trim().length > 0;
 
             return (
               <Link key={v.id} to={to} className="vehicle-card">
