@@ -10,12 +10,18 @@ import { LoginPage } from "./pages/admin/LoginPage";
 import { VehicleListPage } from "./features/vehicles/components/VehicleListPage";
 import { ComparePage } from "./features/vehicles/pages/ComparePage";
 
+// ✅ NEW: Selector
+import { VehicleTypeSelectPage } from "./pages/public/VehicleTypeSelectPage";
+
 export default function App() {
   return (
     <Routes>
       {/* Public */}
       <Route element={<PublicLayout />}>
-        <Route path="/" element={<VehiclesPage />} />
+        {/* ✅ Entry choice */}
+        <Route path="/" element={<VehicleTypeSelectPage />} />
+
+        {/* ✅ Listing requires type (otherwise bounce to /) */}
         <Route path="/vehicles" element={<VehiclesPage />} />
         <Route path="/vehicles/:slug" element={<VehicleDetailsPage />} />
 
@@ -39,7 +45,7 @@ export default function App() {
       </Route>
 
       {/* Fallback */}
-      <Route path="*" element={<Navigate to="/vehicles" replace />} />
+      <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
 }

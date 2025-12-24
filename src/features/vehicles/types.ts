@@ -121,17 +121,55 @@ export type CarSpecsDto = Partial<{
  * NOTE: no legacy flat fields like autoStartStop, spare, etc.
  */
 export type VehicleDetailsDto = {
+  // ===== stable fields =====
   description?: string;
   colorsAvailableJson?: string;
   warrantyYears?: number;
   serviceIntervalKm?: number;
 
+  // ===== nested (primary contract) =====
   engine?: EngineSpecsDto | null;
   ev?: EvSpecsDto | null;
   dimensions?: DimensionsSpecsDto | null;
   dynamics?: DynamicsSpecsDto | null;
   bike?: BikeSpecsDto | null;
   car?: CarSpecsDto | null;
+
+  // ===== legacy flat mirrors (READ-ONLY SUPPORT) =====
+  engineType?: string;
+  inductionType?: string;
+  emission?: string;
+  fuelType?: string;
+
+  power?: number;
+  powerRpm?: number;
+  torque?: number;
+  torqueRpm?: number;
+  mileage?: number;
+  range?: number;
+
+  length?: number;
+  width?: number;
+  height?: number;
+  wheelBase?: number;
+  groundClearance?: number;
+  weight?: number;
+
+  personCapacity?: number;
+  rows?: number;
+  doors?: number;
+  bootSpace?: number;
+  tankSize?: number;
+
+  frontType?: string;
+  backType?: string;
+  frontBrake?: string;
+  backBrake?: string;
+  tyreType?: string;
+  wheelMaterial?: string;
+
+  specification?: string;
+  spare?: string | boolean;
 };
 
 /**

@@ -9,14 +9,16 @@ export function PublicLayout() {
     <div className="public-root">
       <header className="public-header">
         <div className="public-logo">
-          <Link to="/vehicles" aria-label="Autorovers home">
+          {/* 👇 IMPORTANT: root goes to selector */}
+          <Link to="/" aria-label="Autorovers home">
             <Logo size="md" />
           </Link>
         </div>
 
         <nav className="public-nav">
-          <Link to="/vehicles" className="public-nav-link">
-            Vehicles
+          {/* 👇 IMPORTANT: browse = selector */}
+          <Link to="/" className="public-nav-link">
+            Browse
           </Link>
 
           {loggedIn ? (
