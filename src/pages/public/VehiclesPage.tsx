@@ -1,7 +1,7 @@
 // src/pages/public/VehiclesPage.tsx
 // FULL FILE — Block C stable + Block D (decision-grade cards + UX polish) — minimal change
 
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 
 import type { VehicleListItem } from "../../features/vehicles/types";
@@ -421,7 +421,7 @@ export function VehiclesPage() {
     return undefined;
   }
 
-  function onToggleCompare(e: React.MouseEvent, v: VehicleListItem) {
+  function onToggleCompare(e: MouseEvent, v: VehicleListItem) {
     e.preventDefault();
     e.stopPropagation();
 
