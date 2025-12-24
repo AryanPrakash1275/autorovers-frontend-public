@@ -1390,3 +1390,39 @@ button.public-nav-link {
 .vehicle-card-cta {
   margin-top: 0.7rem;
 }
+/* =========================
+   Block E — Compare hardening
+========================= */
+
+/* Sticky first column (Spec) */
+.compare-table--sticky-spec .compare-spec,
+.compare-table--sticky-spec .compare-spec-cell {
+  position: sticky;
+  left: 0;
+  z-index: 6;
+}
+
+/* Keep it readable over other cells while scrolling */
+.compare-table--sticky-spec .compare-spec {
+  background: #f9fafb; /* matches your thead background */
+}
+
+.compare-table--sticky-spec .compare-spec-cell {
+  background: rgba(2, 6, 23, 0.02); /* matches your compare-spec-cell bg */
+  z-index: 4;
+}
+
+/* Over-limit hint row */
+.compare-limit-hint {
+  margin-top: 8px;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.compare-limit-btn {
+  padding: 0.4rem 0.75rem;
+}

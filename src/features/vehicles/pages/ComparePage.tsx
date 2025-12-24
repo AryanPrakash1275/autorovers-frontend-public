@@ -13,10 +13,7 @@ import {
 import { getPublicVehicleBySlug } from "../api";
 import type { VehicleWithDetailsDto, VehicleType, VehicleListItem } from "../types";
 
-import {
-  getComparisonRowsForType,
-  type ComparisonVehicle,
-} from "../comparisonContract";
+import { getComparisonRowsForType, type ComparisonVehicle } from "../comparisonContract";
 import { mapToComparisonVehicle } from "../mapToComparisonVehicle";
 import {
   getSelectedVehicleType,
@@ -82,6 +79,24 @@ function sanitizeStateFromSlugs(
   return { items: nextItems, vehicleType: lockedType };
 }
 
+/** tiny helper for "decision rows first" without touching comparisonContract */
+function decisionRowScore(label: string): number {
+  const t = label.trim().toLowerCase();
+
+  // strongest decision drivers up top
+  if (t.includes("price")) return 0;
+  if (t.includes("power")) return 1;
+  if (t.includes("torque")) return 2;
+  if (t.includes("mileage") || t.includes("kmpl") || t.includes("efficien")) return 3;
+  if (t.includes("range")) return 4;
+
+  // other common decision-ish rows
+  if (t.includes("engine") || t.includes("displacement") || t.includes("motor")) return 10;
+  if (t.includes("0-") || t.includes("accel") || t.includes("top speed")) return 11;
+
+  return 100;
+}
+
 export function ComparePage() {
   const nav = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -132,12 +147,10 @@ export function ComparePage() {
     const cur = loadCompare();
     const nextItems = cur.items.filter((x) => x.slug !== slug);
 
-    const next: CompareState =
-      nextItems.length === 0 ? { items: [] } : { ...cur, items: nextItems };
+    const next: CompareState = nextItems.length === 0 ? { items: [] } : { ...cur, items: nextItems };
 
     saveCompare(next);
     // NOTE: saveCompare emits same-tab event → onCompareChanged updates state.
-    // setCompare(next); // not required
   }
 
   function handleClearAll() {
@@ -147,6 +160,20 @@ export function ComparePage() {
 
   function handleAddMore() {
     nav(browseTo);
+  }
+
+  function handleTrimTo4() {
+    const cur = loadCompare();
+    const slugs = uniqMax4(
+      cur.items.map((x) => normalizeSlug(x.slug)).filter(Boolean) as string[]
+    );
+
+    const nextItems: VehicleListItem[] = slugs.map(
+      (s) => ({ id: 0, slug: s } as unknown as VehicleListItem)
+    );
+
+    const next: CompareState = nextItems.length ? { ...cur, items: nextItems } : { items: [] };
+    saveCompare(next);
   }
 
   /* =====================================================
@@ -161,6 +188,16 @@ export function ComparePage() {
     // Use a delimiter that will never appear in slugs
     return slugs.join("|");
   }, [compare.items]);
+
+  // raw count (for UI hint) — we still *render only first 4* via uniqMax4 everywhere
+  const rawCompareCount = useMemo(() => {
+    const slugs = compare.items
+      .map((x) => normalizeSlug(x.slug))
+      .filter((x): x is string => !!x);
+    return new Set(slugs).size;
+  }, [compare.items]);
+
+  const overLimit = rawCompareCount > 4;
 
   /* =====================================================
      (1) URL -> Compare hydration
@@ -254,9 +291,7 @@ export function ComparePage() {
           return;
         }
 
-        const settled = await Promise.allSettled(
-          slugs.map((slug) => getPublicVehicleBySlug(slug))
-        );
+        const settled = await Promise.allSettled(slugs.map((slug) => getPublicVehicleBySlug(slug)));
 
         const ok: VehicleWithDetailsDto[] = [];
         const failedSlugs: string[] = [];
@@ -304,8 +339,7 @@ export function ComparePage() {
         setVehicleType(lockedType);
         setLoading(false);
 
-        const shouldSanitize =
-          failedSlugs.length > 0 || publishable.length !== ok.length;
+        const shouldSanitize = failedSlugs.length > 0 || publishable.length !== ok.length;
 
         if (shouldSanitize) {
           // sanitize storage + state once
@@ -344,7 +378,19 @@ export function ComparePage() {
 
   const rows = useMemo(() => {
     if (!vehicleType) return [];
-    return getComparisonRowsForType(vehicleType);
+    const base = getComparisonRowsForType(vehicleType);
+
+    // ✅ Decision-grade ordering (without touching the contract):
+    // stable sort by a label-based heuristic, keep original order as tie-breaker.
+    return base
+      .map((r, idx) => ({ r, idx }))
+      .sort((a, b) => {
+        const sa = decisionRowScore(a.r.label);
+        const sb = decisionRowScore(b.r.label);
+        if (sa !== sb) return sa - sb;
+        return a.idx - b.idx;
+      })
+      .map((x) => x.r);
   }, [vehicleType]);
 
   const mappedVehicles = useMemo((): ComparisonVehicle[] => {
@@ -397,7 +443,21 @@ export function ComparePage() {
           <h1 className="public-title">Compare</h1>
           <p className="public-subtitle">
             Comparing {mappedVehicles.length} {vehicleType}
+            {overLimit ? " (showing first 4)" : ""}
           </p>
+
+          {overLimit && (
+            <div className="compare-limit-hint">
+              You have more than 4 vehicles selected. Compare supports max 4.
+              <button
+                type="button"
+                className="public-btn public-btn--ghost compare-limit-btn"
+                onClick={handleTrimTo4}
+              >
+                Trim to 4
+              </button>
+            </div>
+          )}
         </div>
 
         <div className="compare-actions">
@@ -411,7 +471,7 @@ export function ComparePage() {
       </div>
 
       <div className="compare-wrap">
-        <table className="compare-table">
+        <table className="compare-table compare-table--sticky-spec">
           <thead>
             <tr>
               <th className="compare-spec">Spec</th>
@@ -424,6 +484,15 @@ export function ComparePage() {
                         src={v.imageUrl}
                         alt={`${v.brand} ${v.model}`}
                         className="compare-img"
+                        width={180}
+                        height={120}
+                        loading="lazy"
+                        decoding="async"
+                        onError={(e) => {
+                          // keep layout stable but avoid broken images
+                          (e.currentTarget as HTMLImageElement).src =
+                            "https://dummyimage.com/600x400/cccccc/000000&text=No+Image";
+                        }}
                       />
 
                       <div className="compare-title">
