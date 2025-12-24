@@ -1,5 +1,8 @@
 // src/features/vehicles/components/VehicleForm.tsx
 // FULL FILE — fixed React typing imports + safe inputs + checkbox-safe handleChange
+// ✅ Added: keep vehicleType synced with category + enforce on submit (fixes "bike type not saving")
+// ✅ Fix: remove unsafe default "Bike" on submit (validate already enforces vehicleType)
+// ✅ Fix: eslint exhaustive-deps warning without rewriting file (no 500 LOC nuking)
 
 import {
   useEffect,
@@ -133,10 +136,14 @@ export function VehicleForm({ initial, mode, onSubmit, onCancel }: Props) {
   const [activeTab, setActiveTab] = useState<Tab>("basics");
   const [errors, setErrors] = useState<FormErrors>({});
 
-  const initBrand = useMemo(() => initBrandState(initial?.brand), [initial?.brand]);
+  const initBrand = useMemo(
+    () => initBrandState(initial?.brand),
+    [initial?.brand]
+  );
   const [selectedBrand, setSelectedBrand] = useState(initBrand.selectedBrand);
   const [customBrand, setCustomBrand] = useState(initBrand.customBrand);
 
+  // ✅ Hydrate when "initial" changes (edit mode)
   useEffect(() => {
     if (!initial) return;
 
@@ -157,11 +164,31 @@ export function VehicleForm({ initial, mode, onSubmit, onCancel }: Props) {
     setCustomBrand(b.customBrand);
   }, [initial]);
 
+  // ✅ Keep vehicleType in sync with category changes (eslint-safe)
+  // NOTE: we only depend on the minimal scalars we read.
+  useEffect(() => {
+    if (!form.category) return;
+
+    // create a minimal object so we don't depend on the whole "form"
+    const minimal = { category: form.category, vehicleType: form.vehicleType } as Vehicle;
+
+    const inferred = inferVehicleTypeFromCategory(minimal);
+    if (!inferred) return;
+
+    setForm((prev) => {
+      if (prev.vehicleType === inferred) return prev;
+      return { ...prev, vehicleType: inferred };
+    });
+  }, [form.category, form.vehicleType]);
+
   const vehicleType = (form.vehicleType ?? "") as VehicleType;
   const isBike = vehicleType === "Bike";
   const isCar = vehicleType === "Car";
 
-  const categoryOptions = useMemo(() => getCategoryOptions(vehicleType), [vehicleType]);
+  const categoryOptions = useMemo(
+    () => getCategoryOptions(vehicleType),
+    [vehicleType]
+  );
   const transmissionOptions = useMemo(
     () => getTransmissionOptions(vehicleType),
     [vehicleType]
@@ -194,7 +221,9 @@ export function VehicleForm({ initial, mode, onSubmit, onCancel }: Props) {
 
       if (NUMBER_FIELDS.has(key)) {
         const num = value === "" ? 0 : Number(value);
-        (next as unknown as Record<string, unknown>)[name] = Number.isFinite(num) ? num : 0;
+        (next as unknown as Record<string, unknown>)[name] = Number.isFinite(num)
+          ? num
+          : 0;
       } else {
         (next as unknown as Record<string, unknown>)[name] = value;
       }
@@ -248,9 +277,16 @@ export function VehicleForm({ initial, mode, onSubmit, onCancel }: Props) {
 
     const finalBrand = getFinalBrand(selectedBrand, customBrand);
 
+    // ✅ final safety net — NO unsafe defaults
+    const inferredType = inferVehicleTypeFromCategory({
+      category: form.category,
+      vehicleType: form.vehicleType,
+    } as Vehicle);
+
     const payload: Vehicle = {
       ...form,
       brand: finalBrand,
+      vehicleType: (form.vehicleType || inferredType || "") as VehicleType,
       year: clampInt(Number(form.year), 1950, new Date().getFullYear() + 1),
       price: Math.max(0, Number(form.price) || 0),
     };
@@ -313,7 +349,12 @@ export function VehicleForm({ initial, mode, onSubmit, onCancel }: Props) {
         )}
 
         {activeTab === "specs" && (
-          <SpecsTab form={form} isBike={isBike} isCar={isCar} handleChange={handleChange} />
+          <SpecsTab
+            form={form}
+            isBike={isBike}
+            isCar={isCar}
+            handleChange={handleChange}
+          />
         )}
       </div>
 
@@ -446,14 +487,23 @@ function BasicsTab({
 
       <div className={`field ${errors.price ? "has-error" : ""}`}>
         <label>Price (₹) *</label>
-        <input type="number" name="price" value={Number(form.price ?? 0)} onChange={handleChange} />
+        <input
+          type="number"
+          name="price"
+          value={Number(form.price ?? 0)}
+          onChange={handleChange}
+        />
         {errors.price && <div className="field-error">{errors.price}</div>}
       </div>
 
       {vehicleType && (
         <div className={`field ${errors.category ? "has-error" : ""}`}>
           <label>Category *</label>
-          <select name="category" value={safeInputValue(form.category)} onChange={handleChange}>
+          <select
+            name="category"
+            value={safeInputValue(form.category)}
+            onChange={handleChange}
+          >
             <option value="">Select category</option>
             {categoryOptions.map((c) => (
               <option key={c} value={c}>
@@ -579,7 +629,11 @@ function SpecsTab({ form, isBike, isCar, handleChange }: SpecsTabProps) {
       <div className="form-grid">
         <div className="field">
           <label>Engine type</label>
-          <input name="engineType" value={String(form.engineType ?? "")} onChange={handleChange} />
+          <input
+            name="engineType"
+            value={String(form.engineType ?? "")}
+            onChange={handleChange}
+          />
         </div>
 
         <div className="field">
@@ -668,12 +722,7 @@ function SpecsTab({ form, isBike, isCar, handleChange }: SpecsTabProps) {
         {(isBike || isCar) && (
           <div className="field">
             <label>Range (km)</label>
-            <input
-              type="number"
-              name="range"
-              value={Number(form.range ?? 0)}
-              onChange={handleChange}
-            />
+            <input type="number" name="range" value={Number(form.range ?? 0)} onChange={handleChange} />
           </div>
         )}
 

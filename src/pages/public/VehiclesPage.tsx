@@ -1,7 +1,7 @@
 // src/pages/public/VehiclesPage.tsx
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 
 import type { VehicleListItem } from "../../features/vehicles/types";
 import { getPublicVehicles } from "../../features/vehicles/api";
@@ -109,6 +109,10 @@ function isEvVehicle(v: VehicleListItem) {
 export function VehiclesPage() {
   const nav = useNavigate();
 
+  // ✅ NEW: read & enforce URL type lock
+  const [searchParams] = useSearchParams();
+  const urlType = searchParams.get("type"); // "bike" | "car" | null
+
   const [vehicles, setVehicles] = useState<VehicleListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -122,6 +126,15 @@ export function VehiclesPage() {
   const [browseTab, setBrowseTab] = useState<BrowseTab>("brand");
 
   const [compare, setCompare] = useState(loadCompare());
+
+  // ✅ Enforce /vehicles requires ?type=bike|car, and lock category accordingly
+  useEffect(() => {
+    if (urlType !== "bike" && urlType !== "car") {
+      nav("/", { replace: true });
+      return;
+    }
+    setCategory(urlType === "bike" ? "bike" : "car");
+  }, [urlType, nav]);
 
   // ===== Featured row carousel state =====
   const featuredRowRef = useRef<HTMLDivElement | null>(null);
@@ -603,7 +616,12 @@ export function VehiclesPage() {
 
       {/* ================= CONTROLS ================= */}
       <section className="catalog-section catalog-section--spaced">
-        <h2 style={{ marginBottom: 12 }}>All Vehicles</h2>
+        <h2 style={{ marginBottom: 12 }}>
+          All Vehicles{" "}
+          <span style={{ opacity: 0.7, fontWeight: 400 }}>
+            ({urlType === "bike" ? "Bikes" : "Cars"})
+          </span>
+        </h2>
 
         <div className="catalog-controls">
           <input
@@ -614,12 +632,8 @@ export function VehiclesPage() {
             onChange={(e) => setSearch(e.target.value)}
           />
 
-          <select
-            className="catalog-select"
-            value={category}
-            onChange={(e) => setCategory(e.target.value as CategoryFilter)}
-          >
-            <option value="all">All vehicles</option>
+          {/* ✅ Locked because browsing is locked by URL type */}
+          <select className="catalog-select" value={category} disabled>
             <option value="bike">Bikes</option>
             <option value="car">Cars</option>
           </select>
