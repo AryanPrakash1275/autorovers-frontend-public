@@ -76,31 +76,33 @@ function roundToNearest(n: number, step: number) {
 }
 
 /* =========================
-   HUMAN TYPE INFERENCE (FIX)
-   Use vehicleType first; fallback to category inference
+   Type helpers
 ========================= */
 
 function norm(v: unknown) {
   return typeof v === "string" ? v.trim().toLowerCase() : "";
 }
 
-function asVehicleType(v: unknown): "Bike" | "Car" | undefined {
-  const t = norm(v);
-  if (t === "bike") return "Bike";
-  if (t === "car") return "Car";
+function toSelectedTypeFromVehicleType(vt: unknown): VehicleType | undefined {
+  const t = norm(vt);
+  if (t === "bike") return "bike";
+  if (t === "car") return "car";
   return undefined;
 }
 
-function inferTypeFromCategory(catRaw: unknown): "Bike" | "Car" | undefined {
+function inferSelectedTypeFromCategory(catRaw: unknown): VehicleType | undefined {
   const c = norm(catRaw);
   if (!c) return undefined;
-  if (BIKE_CATEGORIES.has(c)) return "Bike";
-  if (CAR_CATEGORIES.has(c)) return "Car";
+  if (BIKE_CATEGORIES.has(c)) return "bike";
+  if (CAR_CATEGORIES.has(c)) return "car";
   return undefined;
 }
 
-function getType(v: VehicleListItem): "Bike" | "Car" | undefined {
-  return asVehicleType(v.vehicleType) ?? inferTypeFromCategory(v.category);
+function getSelectedTypeForRow(v: VehicleListItem): VehicleType | undefined {
+  // Prefer explicit vehicleType; fallback to category inference
+  return (
+    toSelectedTypeFromVehicleType(v.vehicleType) ?? inferSelectedTypeFromCategory(v.category)
+  );
 }
 
 function isEvVehicle(v: VehicleListItem) {
@@ -119,14 +121,14 @@ export function VehiclesPage() {
   const urlTypeRaw = searchParams.get("type"); // "bike" | "car" | null
   const urlType = isVehicleType(urlTypeRaw) ? urlTypeRaw : undefined;
 
-  const [selectedType, setSelectedType] = useState<VehicleType | undefined>(
-    () => getSelectedVehicleType()
+  const [selectedType, setSelectedType] = useState<VehicleType | undefined>(() =>
+    getSelectedVehicleType()
   );
 
   // ✅ Single-source-of-truth behavior:
   // - If URL has valid type → persist it + use it
-  // - Else if storage has type → redirect to URL with that type (keeps deep links consistent)
-  // - Else (guard should prevent this) → bounce to "/"
+  // - Else if storage has type → redirect to URL with that type
+  // - Else → bounce to "/"
   useEffect(() => {
     const stored = getSelectedVehicleType();
 
@@ -159,11 +161,18 @@ export function VehiclesPage() {
 
   const [compare, setCompare] = useState(loadCompare());
 
-  // ✅ Lock category once selectedType is resolved
+  // ✅ Lock category once selectedType is resolved (UI only; browsing is enforced by typedVehicles)
   useEffect(() => {
     if (!selectedType) return;
     setCategory(selectedType === "bike" ? "bike" : "car");
   }, [selectedType]);
+
+  // ✅ THIS is Block C core:
+  // Everything on page uses typedVehicles (never raw mixed list)
+  const typedVehicles = useMemo(() => {
+    if (!selectedType) return [];
+    return vehicles.filter((v) => getSelectedTypeForRow(v) === selectedType);
+  }, [vehicles, selectedType]);
 
   // ===== Featured row carousel state =====
   const featuredRowRef = useRef<HTMLDivElement | null>(null);
@@ -226,8 +235,8 @@ export function VehiclesPage() {
   }, []);
 
   const bundleMeta = useMemo(() => {
-    const prices = vehicles.map((v) => safeNum(v.price)).filter((x) => x > 0);
-    const years = vehicles.map((v) => safeNum(v.year)).filter((x) => x > 0);
+    const prices = typedVehicles.map((v) => safeNum(v.price)).filter((x) => x > 0);
+    const years = typedVehicles.map((v) => safeNum(v.year)).filter((x) => x > 0);
 
     const p30 = computePercentile(prices, 0.3);
     const budgetUnderRaw = p30 > 0 ? p30 : 150000;
@@ -237,7 +246,7 @@ export function VehiclesPage() {
     const newestYearFloor = maxYear > 0 ? maxYear - 1 : 0;
 
     return { budgetUnder, maxYear, newestYearFloor };
-  }, [vehicles]);
+  }, [typedVehicles]);
 
   function goGrid() {
     setTimeout(() => {
@@ -268,16 +277,19 @@ export function VehiclesPage() {
       case "ev":
         return (v: VehicleListItem) => isEvVehicle(v);
       case "suv":
-        return (v: VehicleListItem) => norm(v.category) === "suv";
+        return (v: VehicleListItem) =>
+          selectedType === "car" && norm(v.category) === "suv";
       case "commuter":
-        return (v: VehicleListItem) => norm(v.category) === "commuter";
+        return (v: VehicleListItem) =>
+          selectedType === "bike" && norm(v.category) === "commuter";
       default:
         return () => true;
     }
-  }, [bundle, bundleMeta.budgetUnder, bundleMeta.newestYearFloor]);
+  }, [bundle, bundleMeta.budgetUnder, bundleMeta.newestYearFloor, selectedType]);
 
   const filteredVehicles = useMemo(() => {
-    let list = vehicles.filter(bundlePredicate);
+    // ✅ Start from typedVehicles (never mixed list)
+    let list = typedVehicles.filter(bundlePredicate);
 
     const s = search.trim().toLowerCase();
     if (s) {
@@ -293,12 +305,6 @@ export function VehiclesPage() {
           cat.includes(s)
         );
       });
-    }
-
-    if (category === "bike") {
-      list = list.filter((v) => getType(v) === "Bike");
-    } else if (category === "car") {
-      list = list.filter((v) => getType(v) === "Car");
     }
 
     const sorted = [...list];
@@ -323,10 +329,13 @@ export function VehiclesPage() {
     });
 
     return sorted;
-  }, [vehicles, bundlePredicate, search, category, sortBy]);
+  }, [typedVehicles, bundlePredicate, search, sortBy]);
 
+  /* =========================
+     Featured section
+========================= */
   const featuredList = useMemo(() => {
-    const base = vehicles.filter((v) => safeNum(v.price) > 0 && safeNum(v.year) > 0);
+    const base = typedVehicles.filter((v) => safeNum(v.price) > 0 && safeNum(v.year) > 0);
 
     const newest = [...base].sort((a, b) => safeNum(b.year) - safeNum(a.year));
     const cheapestRecent = [...base]
@@ -347,7 +356,7 @@ export function VehiclesPage() {
       default:
         return newest.slice(0, 12);
     }
-  }, [vehicles, featuredTab, bundleMeta.maxYear]);
+  }, [typedVehicles, featuredTab, bundleMeta.maxYear]);
 
   useEffect(() => {
     setTimeout(() => updateArrows(), 0);
@@ -360,7 +369,7 @@ export function VehiclesPage() {
   }, []);
 
   const topBrands = useMemo(() => {
-    const brands = vehicles.map((v) => safeStr(v.brand).trim()).filter(Boolean);
+    const brands = typedVehicles.map((v) => safeStr(v.brand).trim()).filter(Boolean);
     const map = new Map<string, number>();
     for (const b of brands) map.set(b, (map.get(b) ?? 0) + 1);
 
@@ -368,7 +377,7 @@ export function VehiclesPage() {
       .sort((a, b) => b[1] - a[1])
       .slice(0, 12)
       .map(([b]) => b);
-  }, [vehicles]);
+  }, [typedVehicles]);
 
   const compareCount = compare.items.length;
 
@@ -473,6 +482,7 @@ export function VehiclesPage() {
           </button>
         </div>
 
+        {/* ✅ FEATURED CAROUSEL WITH ARROWS */}
         <div className="bundle-row-wrap">
           <button
             className="bundle-arrow"
@@ -594,45 +604,74 @@ export function VehiclesPage() {
               <button className="browse-pill" onClick={() => applyPreset("ev")}>
                 EVs
               </button>
-              <button className="browse-pill" onClick={() => applyPreset("suv")}>
-                SUVs
-              </button>
-              <button className="browse-pill" onClick={() => applyPreset("commuter")}>
-                Commuters
-              </button>
+
+              {selectedType === "car" ? (
+                <button className="browse-pill" onClick={() => applyPreset("suv")}>
+                  SUVs
+                </button>
+              ) : (
+                <button className="browse-pill" onClick={() => applyPreset("commuter")}>
+                  Commuters
+                </button>
+              )}
             </div>
           )}
 
           {browseTab === "body" && (
             <div className="browse-grid">
-              <button className="browse-pill" onClick={() => applyPreset("suv")}>
-                SUVs
-              </button>
-              <button className="browse-pill" onClick={() => applyPreset("commuter")}>
-                Commuters
-              </button>
-              <button
-                className="browse-pill"
-                onClick={() => {
-                  setBundle("none");
-                  setSearch("Sedan");
-                  setCategory("car");
-                  goGrid();
-                }}
-              >
-                Sedans
-              </button>
-              <button
-                className="browse-pill"
-                onClick={() => {
-                  setBundle("none");
-                  setSearch("Hatchback");
-                  setCategory("car");
-                  goGrid();
-                }}
-              >
-                Hatchbacks
-              </button>
+              {selectedType === "car" ? (
+                <>
+                  <button className="browse-pill" onClick={() => applyPreset("suv")}>
+                    SUVs
+                  </button>
+                  <button
+                    className="browse-pill"
+                    onClick={() => {
+                      setBundle("none");
+                      setSearch("Sedan");
+                      goGrid();
+                    }}
+                  >
+                    Sedans
+                  </button>
+                  <button
+                    className="browse-pill"
+                    onClick={() => {
+                      setBundle("none");
+                      setSearch("Hatchback");
+                      goGrid();
+                    }}
+                  >
+                    Hatchbacks
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button className="browse-pill" onClick={() => applyPreset("commuter")}>
+                    Commuters
+                  </button>
+                  <button
+                    className="browse-pill"
+                    onClick={() => {
+                      setBundle("none");
+                      setSearch("Sport");
+                      goGrid();
+                    }}
+                  >
+                    Sport
+                  </button>
+                  <button
+                    className="browse-pill"
+                    onClick={() => {
+                      setBundle("none");
+                      setSearch("Cruiser");
+                      goGrid();
+                    }}
+                  >
+                    Cruisers
+                  </button>
+                </>
+              )}
             </div>
           )}
         </div>
@@ -654,6 +693,7 @@ export function VehiclesPage() {
             onChange={(e) => setSearch(e.target.value)}
           />
 
+          {/* locked - browsing type is controlled by selector */}
           <select className="catalog-select" value={category} disabled>
             <option value="bike">Bikes</option>
             <option value="car">Cars</option>

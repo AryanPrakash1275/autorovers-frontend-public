@@ -1,14 +1,33 @@
 // src/pages/public/VehicleTypeSelectPage.tsx
+
+import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
+
 import { Footer } from "../../shared/ui/Footer";
-import { setSelectedVehicleType, type VehicleType } from "../../features/vehicles/vehicleTypeStorage";
+import { clearCompare } from "../../features/vehicles/compareState";
+import {
+  getSelectedVehicleType,
+  setSelectedVehicleType,
+  type VehicleType,
+} from "../../features/vehicles/vehicleTypeStorage";
 
 export function VehicleTypeSelectPage() {
   const nav = useNavigate();
 
-  function pick(type: VehicleType) {
-    setSelectedVehicleType(type);
-    nav(`/vehicles?type=${type}`);
+  const current = useMemo(() => getSelectedVehicleType(), []);
+
+  function choose(next: VehicleType) {
+    const prev = getSelectedVehicleType();
+
+    // persist
+    setSelectedVehicleType(next);
+
+    // if switching type, wipe compare (avoids mixed-type remnants)
+    if (prev && prev !== next) {
+      clearCompare();
+    }
+
+    nav(`/vehicles?type=${next}`, { replace: true });
   }
 
   return (
@@ -17,32 +36,23 @@ export function VehicleTypeSelectPage() {
         <div className="hero-layer">
           <div className="hero-copy">
             <h1 className="hero-title">What do you want to browse?</h1>
-            <p className="hero-tagline">
-              Pick one. You’ll see a clean, focused catalog.
-            </p>
+            <p className="hero-tagline">Pick one. You’ll see a clean, focused catalog.</p>
 
-            <div
-              style={{
-                display: "flex",
-                gap: 12,
-                marginTop: 16,
-                flexWrap: "wrap",
-              }}
-            >
+            <div style={{ display: "flex", gap: 12, marginTop: 16, flexWrap: "wrap" }}>
               <button
                 type="button"
                 className="public-btn public-btn--primary"
-                onClick={() => pick("bike")}
+                onClick={() => choose("bike")}
               >
-                Browse Bikes
+                Browse Bikes {current === "bike" ? "✓" : ""}
               </button>
 
               <button
                 type="button"
                 className="public-btn public-btn--ghost"
-                onClick={() => pick("car")}
+                onClick={() => choose("car")}
               >
-                Browse Cars
+                Browse Cars {current === "car" ? "✓" : ""}
               </button>
             </div>
 

@@ -13,12 +13,13 @@ import {
 import { getPublicVehicleBySlug } from "../api";
 import type { VehicleWithDetailsDto, VehicleType } from "../types";
 
-import {
-  getComparisonRowsForType,
-  type ComparisonVehicle,
-} from "../comparisonContract";
+import { getComparisonRowsForType, type ComparisonVehicle } from "../comparisonContract";
 import { mapToComparisonVehicle } from "../mapToComparisonVehicle";
-import { getSelectedVehicleType } from "../vehicleTypeStorage";
+import {
+  getSelectedVehicleType,
+  onVehicleTypeChanged,
+  type VehicleType as StoredVehicleType,
+} from "../vehicleTypeStorage";
 
 /* =========================
    Helpers
@@ -30,6 +31,7 @@ function sanitizeStateFromSlugs(
   lockedType?: VehicleType
 ): CompareState {
   const nextItems = prev.items.filter((x) => !!x.slug && keepSlugs.has(x.slug));
+  if (nextItems.length === 0) return { items: [] };
   return { items: nextItems, vehicleType: lockedType };
 }
 
@@ -42,24 +44,21 @@ export function ComparePage() {
   const [vehicleType, setVehicleType] = useState<VehicleType | undefined>();
   const [err, setErr] = useState<string | null>(null);
 
-  const selectedType = getSelectedVehicleType();
-  const browseTo = selectedType ? `/vehicles?type=${selectedType}` : "/";
+  // ✅ reactive selected type (so Browse/Add-more always correct)
+  const [selectedType, setSelectedType] = useState<StoredVehicleType | undefined>(() =>
+    getSelectedVehicleType()
+  );
+
+  useEffect(() => {
+    return onVehicleTypeChanged(setSelectedType);
+  }, []);
 
   useEffect(() => {
     const off = onCompareChanged(setCompare);
-
-    const onStorage = (e: StorageEvent) => {
-      if (e.key === "autorovers_compare_v1") {
-        setCompare(loadCompare());
-      }
-    };
-
-    window.addEventListener("storage", onStorage);
-    return () => {
-      off();
-      window.removeEventListener("storage", onStorage);
-    };
+    return () => off();
   }, []);
+
+  const browseTo = selectedType ? `/vehicles?type=${selectedType}` : "/";
 
   function handleRemove(slug?: string | null) {
     if (!slug) return;
@@ -67,8 +66,7 @@ export function ComparePage() {
     const cur = loadCompare();
     const nextItems = cur.items.filter((x) => x.slug !== slug);
 
-    const next: CompareState =
-      nextItems.length === 0 ? { items: [] } : { ...cur, items: nextItems };
+    const next: CompareState = nextItems.length === 0 ? { items: [] } : { ...cur, items: nextItems };
 
     saveCompare(next);
     setCompare(next);
@@ -128,14 +126,14 @@ export function ComparePage() {
 
           if (!mapped.ok) {
             console.warn(
-              `NOT PUBLISHABLE | slug=${String(dto.slug)} | reason=${mapped.reason} | type=${String(dto.vehicleType)} | cat=${String(dto.category)}`
+              `NOT PUBLISHABLE | slug=${String(dto.slug)} | reason=${mapped.reason} | type=${String(
+                dto.vehicleType
+              )} | cat=${String(dto.category)}`
             );
-            console.warn("details:", dto.details);
             continue;
           }
 
           const t = mapped.value.vehicleType;
-
           if (!lockedType) lockedType = t;
 
           if (t !== lockedType) {
@@ -174,7 +172,7 @@ export function ComparePage() {
       }
     }
 
-    run();
+    void run();
     return () => {
       cancelled = true;
     };
@@ -219,9 +217,7 @@ export function ComparePage() {
         </div>
 
         <div className="empty-state">
-          <p className="muted">
-            Your compare list is empty (or has only 1 publishable vehicle).
-          </p>
+          <p className="muted">Your compare list is empty (or has only 1 publishable vehicle).</p>
           <Link className="public-btn public-btn--primary" to={browseTo}>
             Browse vehicles
           </Link>

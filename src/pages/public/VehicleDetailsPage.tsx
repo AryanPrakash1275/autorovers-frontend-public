@@ -11,7 +11,11 @@ import type {
 } from "../../features/vehicles/types";
 import { getPublicVehicleBySlug } from "../../features/vehicles/api";
 import { Footer } from "../../shared/ui/Footer";
-import { getSelectedVehicleType } from "../../features/vehicles/vehicleTypeStorage";
+import {
+  getSelectedVehicleType,
+  onVehicleTypeChanged,
+  type VehicleType,
+} from "../../features/vehicles/vehicleTypeStorage";
 
 type MaybeError = { message?: string };
 
@@ -77,8 +81,16 @@ export function VehicleDetailsPage() {
   const nav = useNavigate();
   const { slug } = useParams<{ slug: string }>();
 
-  // Guard already exists at routing, but keep this safe for runtime storage failures
-  const selectedType = getSelectedVehicleType();
+  // ✅ reactive selected type (same tab + other tabs)
+  const [selectedType, setSelectedType] = useState<VehicleType | undefined>(() =>
+    getSelectedVehicleType()
+  );
+
+  useEffect(() => {
+    return onVehicleTypeChanged(setSelectedType);
+  }, []);
+
+  // Guard already exists at routing, but keep safe
   useEffect(() => {
     if (!selectedType) nav("/", { replace: true });
   }, [selectedType, nav]);
@@ -258,21 +270,15 @@ export function VehicleDetailsPage() {
           </p>
 
           <div className="vehicle-features">
-            {hasValue(v.category) && (
-              <span className="feature-badge">{text(v.category)}</span>
-            )}
+            {hasValue(v.category) && <span className="feature-badge">{text(v.category)}</span>}
             {hasValue(v.transmission) && (
               <span className="feature-badge">{text(v.transmission)}</span>
             )}
             {hasValue(d.specification) && (
               <span className="feature-badge">{text(d.specification)}</span>
             )}
-            {hasValue(engineType) && (
-              <span className="feature-badge">{text(engineType)}</span>
-            )}
-            {colors.length > 0 && (
-              <span className="feature-badge">{colors.length} colors</span>
-            )}
+            {hasValue(engineType) && <span className="feature-badge">{text(engineType)}</span>}
+            {colors.length > 0 && <span className="feature-badge">{colors.length} colors</span>}
           </div>
 
           {hasVariants && (
@@ -387,7 +393,10 @@ export function VehicleDetailsPage() {
           </section>
         )}
 
-        {(hasValue(engineType) || hasValue(inductionType) || hasValue(emission) || hasValue(range)) && (
+        {(hasValue(engineType) ||
+          hasValue(inductionType) ||
+          hasValue(emission) ||
+          hasValue(range)) && (
           <section className="spec-card">
             <h2>Engine</h2>
             <dl>
@@ -399,7 +408,10 @@ export function VehicleDetailsPage() {
           </section>
         )}
 
-        {(hasValue(power) || hasValue(torque) || hasValue(d.warrantyYears) || hasValue(d.serviceIntervalKm)) && (
+        {(hasValue(power) ||
+          hasValue(torque) ||
+          hasValue(d.warrantyYears) ||
+          hasValue(d.serviceIntervalKm)) && (
           <section className="spec-card">
             <h2>Performance</h2>
             <dl>
@@ -414,7 +426,12 @@ export function VehicleDetailsPage() {
           </section>
         )}
 
-        {(hasValue(length) || hasValue(width) || hasValue(height) || hasValue(weight) || hasValue(wheelBase) || hasValue(groundClearance)) && (
+        {(hasValue(length) ||
+          hasValue(width) ||
+          hasValue(height) ||
+          hasValue(weight) ||
+          hasValue(wheelBase) ||
+          hasValue(groundClearance)) && (
           <section className="spec-card">
             <h2>Dimensions & Weight</h2>
             <dl>
@@ -428,7 +445,11 @@ export function VehicleDetailsPage() {
           </section>
         )}
 
-        {(hasValue(personCapacity) || hasValue(rows) || hasValue(doors) || hasValue(bootSpace) || hasValue(tankSize)) && (
+        {(hasValue(personCapacity) ||
+          hasValue(rows) ||
+          hasValue(doors) ||
+          hasValue(bootSpace) ||
+          hasValue(tankSize)) && (
           <section className="spec-card">
             <h2>Capacity</h2>
             <dl>
@@ -441,7 +462,13 @@ export function VehicleDetailsPage() {
           </section>
         )}
 
-        {(hasValue(frontType) || hasValue(backType) || hasValue(frontBrake) || hasValue(backBrake) || hasValue(tyreType) || hasValue(wheelMaterial)) && (
+        {(hasValue(frontType) ||
+          hasValue(backType) ||
+          hasValue(frontBrake) ||
+          hasValue(backBrake) ||
+          hasValue(tyreType) ||
+          hasValue(wheelMaterial) ||
+          hasValue(d.spare)) && (
           <section className="spec-card">
             <h2>Tyres & Brakes</h2>
             <dl>
