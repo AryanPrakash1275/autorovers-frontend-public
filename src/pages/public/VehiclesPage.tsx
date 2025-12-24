@@ -903,8 +903,10 @@ export function VehiclesPage() {
         <div className="compare-bar">
           <div>
             <div className="compare-bar-title">Compare: {compareCount}/4</div>
+
+            {/* ✅ CHANGED COPY ONLY */}
             <div className="compare-bar-subtitle">
-              {compare.vehicleType ? `Locked to ${compare.vehicleType}` : "Pick one type"}
+              {compareCount < 2 ? "Add 1 more to compare" : "Ready — compare specs side-by-side"}
             </div>
           </div>
 
@@ -918,7 +920,8 @@ export function VehiclesPage() {
               disabled={compareCount < 2}
               title={compareCount < 2 ? "Add at least 2 vehicles to compare" : "Open compare"}
             >
-              {compareCount < 2 ? "Select 2 to Compare" : "Compare"}
+              {/* ✅ CHANGED COPY ONLY */}
+              {compareCount < 2 ? "Add one more" : "Compare now"}
             </button>
           </div>
         </div>
