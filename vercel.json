@@ -1,5 +1,15 @@
 {
+  "redirects": [
+    {
+      "source": "/(.*)",
+      "has": [{ "type": "host", "value": "www.autorovers.com" }],
+      "destination": "https://autorovers.com/$1",
+      "permanent": true
+    }
+  ],
   "rewrites": [
+    { "source": "/robots.txt", "destination": "/robots.txt" },
+    { "source": "/sitemap.xml", "destination": "/sitemap.xml" },
     { "source": "/(.*)", "destination": "/" }
   ]
 }
