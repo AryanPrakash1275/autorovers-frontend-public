@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+
+  <!-- Home -->
+  <url>
+    <loc>https://www.autorovers.com/</loc>
+  </url>
+
+  <!-- Entry selection -->
+  <url>
+    <loc>https://www.autorovers.com/select</loc>
+  </url>
+
+  <!-- Browse pages -->
+  <url>
+    <loc>https://www.autorovers.com/bikes</loc>
+  </url>
+
+  <url>
+    <loc>https://www.autorovers.com/cars</loc>
+  </url>
+
+</urlset>
