@@ -24,7 +24,7 @@ function uniqSorted(list: string[]) {
   );
 }
 
-// ✅ normalize category sets to lowercase
+// normalize category sets to lowercase
 const BIKE_CATEGORY_SET = new Set(
   (BIKE_CATEGORIES as readonly string[]).map((x) => String(x).trim().toLowerCase())
 );

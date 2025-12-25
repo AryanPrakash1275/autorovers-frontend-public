@@ -1,6 +1,3 @@
-// src/features/vehicles/components/VehicleListPage.tsx
-// FULL FILE — Filters upgraded (price min/max + hasSlug + hasImage) + Compare CTA
-
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useVehicles } from "../hooks/useVehicles";
@@ -147,7 +144,7 @@ export function VehicleListPage() {
   const [transFilter, setTransFilter] = useState<string>("all");
   const [yearFilter, setYearFilter] = useState<string>("all");
 
-  // ✅ NEW filters
+  // NEW filters
   const [minPrice, setMinPrice] = useState<string>("");
   const [maxPrice, setMaxPrice] = useState<string>("");
   const [onlyHasSlug, setOnlyHasSlug] = useState(false);
@@ -159,7 +156,7 @@ export function VehicleListPage() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [editLoading, setEditLoading] = useState(false);
 
-  // ✅ Compare state
+  // Compare state
   const [compare, setCompare] = useState(loadCompare());
 
   const handleSortChange = (key: SortKey) => {
@@ -489,7 +486,7 @@ export function VehicleListPage() {
           </select>
         </div>
 
-        {/* ✅ NEW FILTER ROW */}
+        {/* NEW FILTER ROW */}
         <div className="admin-filters-row" style={{ marginTop: 10 }}>
           <input
             type="number"
@@ -542,7 +539,7 @@ export function VehicleListPage() {
 
       {actionError && <div className="alert alert-error">{actionError}</div>}
 
-      {/* ✅ Compare CTA bar */}
+      {/*Compare CTA bar */}
       {compare.items.length >= 2 && (
         <div
           style={{

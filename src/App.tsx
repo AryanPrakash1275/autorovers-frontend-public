@@ -1,4 +1,3 @@
-// src/App.tsx
 import { Routes, Route, Navigate } from "react-router-dom";
 
 import { PublicLayout } from "./app/layouts/PublicLayout";
@@ -12,7 +11,7 @@ import { LoginPage } from "./pages/admin/LoginPage";
 import { VehicleListPage } from "./features/vehicles/components/VehicleListPage";
 import { ComparePage } from "./features/vehicles/pages/ComparePage";
 
-// ✅ Selector
+//Selector
 import { VehicleTypeSelectPage } from "./pages/public/VehicleTypeSelectPage";
 
 export default function App() {
@@ -23,7 +22,7 @@ export default function App() {
         {/* Entry choice */}
         <Route path="/" element={<VehicleTypeSelectPage />} />
 
-        {/* ✅ Guarded public flow */}
+        {/*Guarded public flow */}
         <Route
           path="/vehicles"
           element={

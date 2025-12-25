@@ -1,5 +1,3 @@
-// src/app/layouts/PublicLayout.tsx
-
 import { Link, Outlet } from "react-router-dom";
 import { isLoggedIn } from "../../features/auth/storage";
 import { Logo } from "../../shared/ui/Logo";

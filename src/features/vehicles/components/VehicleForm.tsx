@@ -1,9 +1,3 @@
-// src/features/vehicles/components/VehicleForm.tsx
-// FULL FILE — fixed React typing imports + safe inputs + checkbox-safe handleChange
-// ✅ Added: keep vehicleType synced with category + enforce on submit (fixes "bike type not saving")
-// ✅ Fix: remove unsafe default "Bike" on submit (validate already enforces vehicleType)
-// ✅ Fix: eslint exhaustive-deps warning without rewriting file (no 500 LOC nuking)
-
 import {
   useEffect,
   useMemo,
@@ -143,7 +137,6 @@ export function VehicleForm({ initial, mode, onSubmit, onCancel }: Props) {
   const [selectedBrand, setSelectedBrand] = useState(initBrand.selectedBrand);
   const [customBrand, setCustomBrand] = useState(initBrand.customBrand);
 
-  // ✅ Hydrate when "initial" changes (edit mode)
   useEffect(() => {
     if (!initial) return;
 
@@ -164,12 +157,10 @@ export function VehicleForm({ initial, mode, onSubmit, onCancel }: Props) {
     setCustomBrand(b.customBrand);
   }, [initial]);
 
-  // ✅ Keep vehicleType in sync with category changes (eslint-safe)
   // NOTE: we only depend on the minimal scalars we read.
   useEffect(() => {
     if (!form.category) return;
 
-    // create a minimal object so we don't depend on the whole "form"
     const minimal = { category: form.category, vehicleType: form.vehicleType } as Vehicle;
 
     const inferred = inferVehicleTypeFromCategory(minimal);
@@ -201,7 +192,6 @@ export function VehicleForm({ initial, mode, onSubmit, onCancel }: Props) {
     setErrors(next);
   }
 
-  // ✅ supports checkboxes + prevents boolean value leakage
   function handleChange(
     e: ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
   ) {
@@ -211,7 +201,6 @@ export function VehicleForm({ initial, mode, onSubmit, onCancel }: Props) {
       const next: Vehicle = { ...prev };
       const key = name as keyof Vehicle;
 
-      // checkbox -> checked boolean
       if (e.target instanceof HTMLInputElement && e.target.type === "checkbox") {
         (next as unknown as Record<string, unknown>)[name] = e.target.checked;
         return next;
@@ -277,7 +266,6 @@ export function VehicleForm({ initial, mode, onSubmit, onCancel }: Props) {
 
     const finalBrand = getFinalBrand(selectedBrand, customBrand);
 
-    // ✅ final safety net — NO unsafe defaults
     const inferredType = inferVehicleTypeFromCategory({
       category: form.category,
       vehicleType: form.vehicleType,

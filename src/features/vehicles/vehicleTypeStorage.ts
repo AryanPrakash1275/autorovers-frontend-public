@@ -1,4 +1,3 @@
-// src/features/vehicles/vehicleTypeStorage.ts
 export type VehicleType = "bike" | "car";
 
 const KEY = "autorovers_vehicle_type_v1";
@@ -18,10 +17,8 @@ export function getSelectedVehicleType(): VehicleType | undefined {
 }
 
 function emit(type: VehicleType | undefined) {
-  // ✅ same-tab reactivity
+  //same-tab reactivity
   window.dispatchEvent(new CustomEvent(EVENT_NAME, { detail: type }));
-
-  // (optional) keep storage event behavior for other tabs handled by browser automatically
 }
 
 export function onVehicleTypeChanged(
@@ -34,7 +31,7 @@ export function onVehicleTypeChanged(
 
   window.addEventListener(EVENT_NAME, handler);
 
-  // ✅ cross-tab reactivity
+  //  cross-tab reactivity
   const onStorage = (e: StorageEvent) => {
     if (e.key === KEY) cb(getSelectedVehicleType());
   };

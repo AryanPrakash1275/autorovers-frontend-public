@@ -1,5 +1,3 @@
-// src/features/vehicles/components/VehicleTable.tsx
-
 import React from "react";
 import { Footer } from "../../../shared/ui/Footer";
 import type { VehicleListItem } from "../types";
@@ -15,7 +13,7 @@ interface VehicleTableProps {
   onEdit: (vehicle: VehicleListItem) => void;
   onDelete: (id: number) => void;
 
-  // ✅ comparison wiring
+  //comparison wiring
   compare: CompareState;
   onToggleCompare: (v: VehicleListItem) => void;
 }
@@ -84,7 +82,7 @@ export function VehicleTable({
     return <p className="muted">No vehicles found.</p>;
   }
 
-  // ✅ always compute a reliable locked type (even if compare.vehicleType is undefined)
+  //  always compute a reliable locked type (even if compare.vehicleType is undefined)
   const lockedType = computeLockedType(compare);
 
   return (
@@ -92,7 +90,7 @@ export function VehicleTable({
       <table className="admin-table">
         <thead>
           <tr>
-            {/* ✅ Compare column */}
+            {/* Compare column */}
             <Th activeSortKey={sortBy} sortDir={sortDir}>
               Compare
             </Th>
@@ -190,11 +188,9 @@ export function VehicleTable({
               Boolean(incomingType) &&
               incomingType !== lockedType;
 
-            // ✅ hard rule: compare requires slug (ComparePage loads by slug)
+            // hard rule: compare requires slug (ComparePage loads by slug)
             const missingSlug = !hasSlug(v);
 
-            // ✅ If already selected, ALWAYS allow removing.
-            // ✅ If not selected, enforce rules: slug, infer type, max 4, same type.
             const disabled =
               !selected &&
               (missingSlug ||
@@ -216,7 +212,7 @@ export function VehicleTable({
 
             return (
               <tr key={v.id}>
-                {/* ✅ Compare toggle */}
+                {/* Compare toggle */}
                 <Td>
                   <button
                     className={`btn btn-sm ${selected ? "" : "btn-ghost"}`}

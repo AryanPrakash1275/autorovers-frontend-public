@@ -91,7 +91,7 @@ export function mapFullVehicleToForm(
   return {
     id: full.id ?? rowFallback.id,
 
-    // ✅ FIXED: stable vehicleType for bikes/cars
+    // FIXED: stable vehicleType for bikes/cars
     vehicleType,
 
     brand: full.brand ?? rowFallback.brand ?? "",

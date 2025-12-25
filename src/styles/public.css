@@ -1,15 +1,8 @@
-/* =========================
-   FULL FILE — src/styles/public.css
-   OG file + fixes + Block D polish
-   (No LOC nuking. Comments trimmed only where useless.)
-========================= */
-
 :root {
   --bg: #f6f7f9;
   --bg-card: #ffffff;
   --bg-alt: rgba(15, 23, 42, 0.04);
 
-  /* text colors (less “pure black”, more slate like your UI) */
   --text: #0f172a;
   --text-muted: rgba(15, 23, 42, 0.62);
 
@@ -58,7 +51,7 @@ canvas {
   outline-offset: 2px;
 }
 
-/* ✅ FIX: was shrinking/centering the whole site on wide screens */
+/*FIX: was shrinking/centering the whole site on wide screens */
 body.public-view {
   display: block;
   justify-content: initial;
@@ -108,7 +101,7 @@ body.public-view {
   color: var(--text);
 }
 
-/* ✅ Better wide-screen breathing room (won’t break small screens) */
+/*Better wide-screen breathing room (won’t break small screens) */
 @media (min-width: 1280px) {
   .public-page {
     max-width: 1400px;
@@ -292,7 +285,7 @@ button.public-nav-link {
   margin-top: 1rem;
 }
 
-/* ✅ Empty state that doesn’t look like a dead one-liner */
+/*Empty state that doesn’t look like a dead one-liner */
 .no-results {
   font-size: 1rem;
   margin-top: 1rem;
@@ -351,7 +344,7 @@ button.public-nav-link {
   padding: 6px;
 }
 
-/* Optional badges (won’t affect anything if not present in JSX) */
+/* Optional badges */
 .vehicle-card-badges {
   position: absolute;
   left: 10px;
@@ -639,7 +632,7 @@ button.public-nav-link {
   align-items: center;
 }
 
-/* ✅ Fallback: if ComparePage renders a plain <table> inside .compare-wrap */
+/*Fallback: if ComparePage renders a plain <table> inside .compare-wrap */
 .compare-wrap table {
   width: 100%;
   min-width: 980px;
@@ -1281,9 +1274,6 @@ button.public-nav-link {
   }
 }
 
-/* =========================
-   Type switch (VehiclesPage)
-   ========================= */
 .type-switch {
   display: inline-flex;
   border: 1px solid rgba(15, 23, 42, 0.14);
@@ -1304,7 +1294,7 @@ button.public-nav-link {
   font-weight: 900;
   cursor: pointer;
   transition: var(--t-fast);
-  min-width: 84px; /* stable width so it doesn't jitter */
+  min-width: 84px; /* stable width so it doesn't jitter, more tweaking needed */
   line-height: 1;
 }
 
@@ -1323,12 +1313,12 @@ button.public-nav-link {
   color: #fff;
 }
 
-/* active button should not show the divider line through it */
+/* active button should not show the divider line through it, hopefully */
 .type-switch-btn.is-active + .type-switch-btn {
   border-left-color: transparent;
 }
 
-/* focus should feel like a single control */
+/* focus should feel like a single control, a bit messy */
 .type-switch:focus-within {
   box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12), var(--shadow-1);
   border-color: rgba(37, 99, 235, 0.28);
@@ -1346,9 +1336,6 @@ button.public-nav-link {
   }
 }
 
-/* =========================
-   Block D.3 — Card affordance polish
-   ========================= */
 
 /* smoother hover + image affordance */
 .vehicle-card {
@@ -1369,7 +1356,7 @@ button.public-nav-link {
   }
 }
 
-/* touch devices: no hover-lift; use press feedback instead */
+/* touch devices: no hover-lift; uses press feedback instead */
 @media (hover: none) and (pointer: coarse) {
   .vehicle-card:hover {
     transform: none;
@@ -1386,13 +1373,10 @@ button.public-nav-link {
   }
 }
 
-/* optional: make CTA area feel deliberate without layout changes */
+/* makes CTA area feel deliberate without layout changes */
 .vehicle-card-cta {
   margin-top: 0.7rem;
 }
-/* =========================
-   Block E — Compare hardening
-========================= */
 
 /* Sticky first column (Spec) */
 .compare-table--sticky-spec .compare-spec,
@@ -1402,13 +1386,13 @@ button.public-nav-link {
   z-index: 6;
 }
 
-/* Keep it readable over other cells while scrolling */
+/* Keeps it readable over other cells while scrolling */
 .compare-table--sticky-spec .compare-spec {
-  background: #f9fafb; /* matches your thead background */
+  background: #f9fafb; 
 }
 
 .compare-table--sticky-spec .compare-spec-cell {
-  background: rgba(2, 6, 23, 0.02); /* matches your compare-spec-cell bg */
+  background: rgba(2, 6, 23, 0.02); 
   z-index: 4;
 }
 

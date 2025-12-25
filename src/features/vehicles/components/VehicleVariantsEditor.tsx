@@ -7,6 +7,7 @@ type Props = {
 };
 
 type Row = VehicleVariantDto & {
+  isActive?: boolean;
   dirty?: boolean;
 };
 

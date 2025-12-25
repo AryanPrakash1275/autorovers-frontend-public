@@ -1,6 +1,3 @@
-// src/features/vehicles/pages/ComparePage.tsx
-// FULL FILE — sticky spec column enabled + decision ordering + over-limit hardening
-
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 
@@ -112,7 +109,7 @@ export function ComparePage() {
   const [vehicleType, setVehicleType] = useState<VehicleType | undefined>();
   const [err, setErr] = useState<string | null>(null);
 
-  // ✅ reactive selected type (Browse/Add-more always correct)
+  //  reactive selected type (Browse/Add-more always correct)
   const [selectedType, setSelectedType] = useState<StoredVehicleType | undefined>(() =>
     getSelectedVehicleType()
   );
@@ -229,7 +226,7 @@ export function ComparePage() {
 
     const next: CompareState = { items: minimalItems };
 
-    // ✅ no setState inside effect needed:
+    // no setState inside effect needed:
     // saveCompare emits same-tab event → our onCompareChanged listener will setCompare.
     saveCompare(next);
 
@@ -387,7 +384,7 @@ export function ComparePage() {
     if (!vehicleType) return [];
     const base = getComparisonRowsForType(vehicleType);
 
-    // ✅ Decision-grade ordering (without touching the contract):
+    // Decision-grade ordering (without touching the contract):
     // stable sort by a label-based heuristic, keep original order as tie-breaker.
     return base
       .map((r, idx) => ({ r, idx }))
@@ -481,7 +478,6 @@ export function ComparePage() {
       </div>
 
       <div className="compare-wrap">
-        {/* ✅ THE TWEAK: enable sticky "Spec" column */}
         <table className="compare-table compare-table--sticky-spec">
           <thead>
             <tr>

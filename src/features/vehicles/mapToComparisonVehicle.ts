@@ -1,5 +1,3 @@
-// src/features/vehicles/mapToComparisonVehicle.ts
-
 import type { VehicleWithDetailsDto, VehicleType } from "./types";
 import {
   type ComparisonMapResult,
@@ -17,9 +15,6 @@ function resolveVehicleType(dto: VehicleWithDetailsDto): VehicleType {
 
   const inferred = inferTypeFromCategory(dto.category ?? null);
   if (inferred) return inferred;
-
-  // last resort: if category exists but inference set misses "Roadster" etc.
-  // treat unknown categories as Bike by default (safer for your dataset right now)
   return "Bike";
 }
 
@@ -58,7 +53,6 @@ export function mapToComparisonVehicle(dto: VehicleWithDetailsDto): ComparisonMa
   try {
     const vehicleType = resolveVehicleType(dto);
 
-    // keep these required (identity + page rendering)
     const id = requiredNum(dto.id, "id");
     const slug = requiredStr(dto.slug, "slug");
     const brand = requiredStr(dto.brand, "brand");

@@ -1,5 +1,3 @@
-// src/features/vehicles/components/vehicleFormUtils.ts
-
 import type { Vehicle } from "../types";
 import {
   BIKE_CATEGORIES,
@@ -43,20 +41,15 @@ export const NUMBER_FIELDS = new Set<keyof Vehicle>([
   "tankSize",
 ]);
 
-// -------------------------------
-// 🔴 FIX #1: Strong inference
-// -------------------------------
 export function inferVehicleTypeFromCategory(
   initial: Vehicle | null | undefined
 ): VehicleType {
   if (!initial) return "";
 
-  // 1️⃣ Explicit value always wins
   if (initial.vehicleType === "Bike" || initial.vehicleType === "Car") {
     return initial.vehicleType;
   }
 
-  // 2️⃣ Infer from CAR-only fields
   if (
     initial.doors ||
     initial.bootSpace ||
@@ -66,12 +59,10 @@ export function inferVehicleTypeFromCategory(
     return "Car";
   }
 
-  // 3️⃣ Infer from BIKE-only fields
   if (initial.tankSize && !initial.doors) {
     return "Bike";
   }
 
-  // 4️⃣ Fallback to category
   const cat = initial.category ?? "";
   if (!cat) return "";
 
@@ -81,9 +72,6 @@ export function inferVehicleTypeFromCategory(
   return "";
 }
 
-// -------------------------------
-// 🔴 FIX #2: Normalizer
-// -------------------------------
 export function normalizeVehicleType(
   value?: string | null
 ): VehicleType {

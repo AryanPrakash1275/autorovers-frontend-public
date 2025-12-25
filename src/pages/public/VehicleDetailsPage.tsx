@@ -1,5 +1,3 @@
-// src/pages/public/VehicleDetailsPage.tsx
-
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams, useNavigate } from "react-router-dom";
 
@@ -81,7 +79,7 @@ export function VehicleDetailsPage() {
   const nav = useNavigate();
   const { slug } = useParams<{ slug: string }>();
 
-  // ✅ reactive selected type (same tab + other tabs)
+  //reactive selected type (same tab + other tabs)
   const [selectedType, setSelectedType] = useState<VehicleType | undefined>(() =>
     getSelectedVehicleType()
   );
@@ -90,7 +88,7 @@ export function VehicleDetailsPage() {
     return onVehicleTypeChanged(setSelectedType);
   }, []);
 
-  // Guard already exists at routing, but keep safe
+  // Guard already exists at routing, but keeping it safe
   useEffect(() => {
     if (!selectedType) nav("/", { replace: true });
   }, [selectedType, nav]);

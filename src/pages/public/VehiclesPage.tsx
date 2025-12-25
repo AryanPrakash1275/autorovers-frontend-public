@@ -1,6 +1,3 @@
-// src/pages/public/VehiclesPage.tsx
-// FULL FILE — Block C stable + Block D (decision-grade cards + UX polish) — minimal change
-
 import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 
@@ -182,7 +179,7 @@ export function VehiclesPage() {
     setCategory(selectedType === "bike" ? "bike" : "car");
   }, [selectedType]);
 
-  // ✅ Switch handler (fixes your "stuck on browse bikes" issue)
+  //Switch handler (fixes your "stuck on browse bikes" issue)
   function switchType(next: VehicleType) {
     // no-op
     if (selectedType === next) return;
@@ -904,7 +901,7 @@ export function VehiclesPage() {
           <div>
             <div className="compare-bar-title">Compare: {compareCount}/4</div>
 
-            {/* ✅ CHANGED COPY ONLY */}
+            {/*  CHANGED COPY ONLY */}
             <div className="compare-bar-subtitle">
               {compareCount < 2 ? "Add 1 more to compare" : "Ready — compare specs side-by-side"}
             </div>
@@ -920,7 +917,7 @@ export function VehiclesPage() {
               disabled={compareCount < 2}
               title={compareCount < 2 ? "Add at least 2 vehicles to compare" : "Open compare"}
             >
-              {/* ✅ CHANGED COPY ONLY */}
+              {/*CHANGED COPY ONLY */}
               {compareCount < 2 ? "Add one more" : "Compare now"}
             </button>
           </div>

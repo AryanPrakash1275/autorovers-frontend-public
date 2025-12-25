@@ -1,4 +1,3 @@
-// src/api/client.ts
 // Centralised HTTP client for the solution. Handles auth, base URL & common error handling.
 
 import { getToken } from "../features/auth/storage";

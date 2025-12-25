@@ -1,5 +1,3 @@
-// src/features/vehicles/types.ts
-
 export type VehicleType = "Bike" | "Car";
 
 /**

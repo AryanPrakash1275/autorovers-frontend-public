@@ -10,7 +10,7 @@ import type {
 const ADMIN_VEHICLES_PATH = "/api/AdminVehicles";
 const PUBLIC_VEHICLES_PATH = "/api/Vehicles";
 
-// ✅ matches backend CreateVehicleRequest (only what we need now)
+//matches backend CreateVehicleRequest (only what we need now)
 export type CreateVehicleRequest = {
   brand: string;
   model: string;
@@ -37,7 +37,7 @@ export type CreateVehicleRequest = {
     torqueRpm?: number | null;
     mileage?: number | null;
     range?: number | null;
-    fuelType?: string | null; // 🔥 REQUIRED for powertrain derive (ICE)
+    fuelType?: string | null; 
   };
 
   dimensions?: {
@@ -86,7 +86,7 @@ export async function getVehicle(id: number): Promise<Vehicle> {
   return apiGet<Vehicle>(`${ADMIN_VEHICLES_PATH}/${id}`);
 }
 
-// ✅ create expects CreateVehicleRequest (not Vehicle)
+//  create expects CreateVehicleRequest (not Vehicle)
 export async function createVehicle(payload: CreateVehicleRequest): Promise<{ id: number }> {
   return apiPost<CreateVehicleRequest, { id: number }>(ADMIN_VEHICLES_PATH, payload);
 }

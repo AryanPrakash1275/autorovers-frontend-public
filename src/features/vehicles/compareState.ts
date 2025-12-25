@@ -1,12 +1,10 @@
-// src/features/vehicles/compareState.ts
-
 import type { VehicleListItem } from "./types";
 
 const KEY = "autorovers_compare_v1";
 const EVENT_NAME = "autorovers:compare_changed";
 
 export type CompareState = {
-  vehicleType?: "Bike" | "Car"; // ✅ canonical
+  vehicleType?: "Bike" | "Car"; 
   items: VehicleListItem[];
 };
 
@@ -127,7 +125,7 @@ export function loadCompare(): CompareState {
 export function saveCompare(state: CompareState) {
   localStorage.setItem(KEY, JSON.stringify(state));
 
-  // ✅ same-tab reactivity
+  //  same-tab reactivity
   window.dispatchEvent(new CustomEvent(EVENT_NAME, { detail: state }));
 }
 

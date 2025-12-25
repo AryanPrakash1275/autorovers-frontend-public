@@ -1,5 +1,3 @@
-// src/pages/public/VehicleTypeSelectPage.tsx
-
 import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -22,7 +20,7 @@ export function VehicleTypeSelectPage() {
     // persist
     setSelectedVehicleType(next);
 
-    // if switching type, wipe compare (avoids mixed-type remnants)
+    // if switching type, it wipes compare (avoids mixed-type remnants)
     if (prev && prev !== next) {
       clearCompare();
     }

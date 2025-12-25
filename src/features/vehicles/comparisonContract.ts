@@ -1,5 +1,3 @@
-// src/features/vehicles/comparisonContract.ts
-
 import type { VehicleType } from "./types";
 
 /* =========================
@@ -19,7 +17,7 @@ type ComparisonBase = {
   imageUrl: string;
 
   // =========================
-  // 🔒 Frozen shared 8 fields
+  //  Frozen shared 8 fields
   // =========================
   price: number; // ex-showroom
   mileageOrRange: number; // ICE mileage OR EV range
@@ -88,7 +86,7 @@ function fmtOneDecimal(n: number): string {
 }
 
 /**
- * 🔒 Exactly 12 rows, in order.
+ * Exactly 12 rows, in order.
  * Shared fields ALWAYS on top.
  * Type-specific fields appended conditionally.
  */
