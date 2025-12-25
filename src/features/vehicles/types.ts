@@ -1,130 +1,293 @@
-//LIST ITEM returned by list endpoints (admin/public).
-// //Trying to keep this shape tolerant: APIs often return nulls or omit fields.
+export type VehicleType = "Bike" | "Car";
 
-export type VehicleListItem = {
+/**
+ * Variant + Addon DTOs (public read)
+ */
+export type VariantAddonDto = {
   id: number;
-  vehicleType?: string | null; // some rows may be missing, or casing may vary
-  brand?: string | null;
-  model?: string | null;
-  variant?: string | null;
-  year?: number | null;
-  price?: number | null;
-  category?: string | null;
-  transmission?: string | null;
-  slug?: string | null;
-  imageUrl?: string | null;
-
-  // Optional fields for cards only (if present)
-  power?: number | null;
-  torque?: number | null;
+  name: string;
+  price: number;
 };
 
+export type VehicleVariantDto = {
+  id: number;
+  name: string;
+  price: number;
+  isDefault: boolean;
+  addons: VariantAddonDto[];
+};
 
-//DETAILS DTO returned under `details` from backend.
-//Partial because backend may omit fields depending on vehicle type.
- 
-export type VehicleDetailsDto = Partial<{
-  // Engine & performance
+/**
+ * Nested specs (matches backend DTO shape)
+ */
+export type EngineSpecsDto = Partial<{
   engineType: string;
-  specification: string;
+  engineDisplacement: number;
   inductionType: string;
+  emission: string;
+  fuelType: string;
+
   power: number;
   powerRpm: number;
   torque: number;
   torqueRpm: number;
-  emission: string;
+
   mileage: number;
-  autoStartStop: string;
   range: number;
-
-  // Dimensions & weight
-  length: number;
-  width: number;
-  height: number;
-  weight: number;
-  groundClearance: number;
-  wheelBase: number;
-
-  // Capacity
-  personCapacity: number;
-  rows: number;
-  doors: number;
-  bootSpace: number;
-  tankSize: number;
-
-  // Tyres, brakes & steering
-  frontType: string;
-  backType: string;
-  frontBrake: string;
-  backBrake: string;
-  poweredSteering: string;
-  tyreSizeFront: string;
-  tyreSizeBack: string;
-  tyreType: string;
-  wheelMaterial: string;
-  spare: string;
 }>;
 
+export type EvSpecsDto = Partial<{
+  batteryCapacity: number;
+  chargingTimeFast: number;
+  chargingTimeNormal: number;
+  motorPower: number;
+  motorTorque: number;
 
-//Combined DTO returned by "vehicle with details" endpoints.
- 
-export type VehicleWithDetailsDto = VehicleListItem & {
-  details?: VehicleDetailsDto;
-};
-
-
-//FULL VEHICLE used by UI forms/pages after mapping defaults.
-
-export type Vehicle = {
-  id: number;
-  vehicleType: string; // "Bike" | "Car"
-  brand: string;
-  model: string;
-  variant: string;
-  year: number;
-  price: number;
-  category: string;
-  transmission: string;
-  slug: string;
-  imageUrl?: string | null;
-
-  // Engine & performance
-  engineType: string;
-  specification: string;
-  inductionType: string;
-  power: number;
-  powerRpm: number;
-  torque: number;
-  torqueRpm: number;
-  emission: string;
-  mileage: number;
-  autoStartStop: string;
+  fastChargingPort: boolean;
   range: number;
+}>;
 
-  // Dimensions & weight
+export type DimensionsSpecsDto = Partial<{
   length: number;
   width: number;
   height: number;
-  weight: number;
-  groundClearance: number;
   wheelBase: number;
+  groundClearance: number;
+  weight: number;
+  turningRadius: number;
+}>;
 
-  // Capacity
+export type DynamicsSpecsDto = Partial<{
+  frontType: string;
+  backType: string;
+
+  frontBrake: string;
+  backBrake: string;
+
+  frontSuspension: string;
+  rearSuspension: string;
+
+  tyreSizeFront: string;
+  tyreSizeBack: string;
+  tyreType: string;
+
+  wheelMaterial: string;
+}>;
+
+export type BikeSpecsDto = Partial<{
+  numberOfGears: number;
+  tankSize: number;
+
+  abs: boolean;
+  tractionControl: boolean;
+
+  displaySize: number;
+  bluetooth: boolean;
+  navigation: boolean;
+  smartConnectivity: boolean;
+}>;
+
+export type CarSpecsDto = Partial<{
+  driveType: string;
+  zeroToHundred: number;
+  topSpeed: number;
+
   personCapacity: number;
   rows: number;
   doors: number;
   bootSpace: number;
-  tankSize: number;
 
-  // Tyres, brakes & steering
-  frontType: string;
-  backType: string;
-  frontBrake: string;
-  backBrake: string;
-  poweredSteering: string;
-  tyreSizeFront: string;
-  tyreSizeBack: string;
-  tyreType: string;
-  wheelMaterial: string;
-  spare: string;
+  poweredSteering: boolean;
+  steeringType: string;
+
+  hasSpareWheel: boolean;
+
+  airbags: number;
+  hillAssist: boolean;
+  rearViewCamera: boolean;
+  parkingSensors: boolean;
+  cruiseControl: boolean;
+
+  displaySize: number;
+  bluetooth: boolean;
+  navigation: boolean;
+  smartConnectivity: boolean;
+}>;
+
+/**
+ * Backend nested details DTO (PUBLIC contract)
+ * NOTE: no legacy flat fields like autoStartStop, spare, etc.
+ */
+export type VehicleDetailsDto = {
+  // ===== stable fields =====
+  description?: string;
+  colorsAvailableJson?: string;
+  warrantyYears?: number;
+  serviceIntervalKm?: number;
+
+  // ===== nested (primary contract) =====
+  engine?: EngineSpecsDto | null;
+  ev?: EvSpecsDto | null;
+  dimensions?: DimensionsSpecsDto | null;
+  dynamics?: DynamicsSpecsDto | null;
+  bike?: BikeSpecsDto | null;
+  car?: CarSpecsDto | null;
+
+  // ===== legacy flat mirrors (READ-ONLY SUPPORT) =====
+  engineType?: string;
+  inductionType?: string;
+  emission?: string;
+  fuelType?: string;
+
+  power?: number;
+  powerRpm?: number;
+  torque?: number;
+  torqueRpm?: number;
+  mileage?: number;
+  range?: number;
+
+  length?: number;
+  width?: number;
+  height?: number;
+  wheelBase?: number;
+  groundClearance?: number;
+  weight?: number;
+
+  personCapacity?: number;
+  rows?: number;
+  doors?: number;
+  bootSpace?: number;
+  tankSize?: number;
+
+  frontType?: string;
+  backType?: string;
+  frontBrake?: string;
+  backBrake?: string;
+  tyreType?: string;
+  wheelMaterial?: string;
+
+  specification?: string;
+  spare?: string | boolean;
+};
+
+/**
+ * Backend response for /api/Vehicles/slug/{slug}
+ * (core vehicle + nested details + variants)
+ */
+export type VehicleWithDetailsDto = {
+  id: number;
+
+  vehicleType?: VehicleType | string;
+  brand?: string;
+  model?: string;
+  variant?: string;
+  year?: number;
+  price?: number;
+
+  category?: string;
+  transmission?: string;
+  slug?: string;
+  imageUrl?: string;
+
+  details?: VehicleDetailsDto;
+  variants?: VehicleVariantDto[];
+};
+
+/**
+ * Public list cards
+ */
+export type VehicleListItem = {
+  id: number;
+  vehicleType?: VehicleType | string;
+  brand?: string;
+  model?: string;
+  variant?: string;
+  year?: number;
+  price?: number;
+  category?: string;
+  transmission?: string;
+  slug?: string;
+  imageUrl?: string;
+};
+
+/**
+ * Admin/UI "form model" (LEGACY FLAT)
+ * VehicleListPage / VehicleForm / VehicleMapper rely on this.
+ */
+export type Vehicle = {
+  id: number;
+
+  vehicleType: VehicleType | string;
+  brand: string;
+  model: string;
+  variant?: string;
+  year: number;
+  price: number;
+
+  category: string;
+  transmission: string;
+  slug?: string;
+  imageUrl?: string;
+
+  description?: string;
+  colorsAvailableJson?: string;
+
+  warrantyYears?: number;
+  serviceIntervalKm?: number;
+
+  engineType?: string;
+  engineDisplacement?: number;
+  fuelType?: string;
+  specification?: string;
+  inductionType?: string;
+  power?: number;
+  powerRpm?: number;
+  torque?: number;
+  torqueRpm?: number;
+  emission?: string;
+  mileage?: number;
+  autoStartStop?: string;
+  range?: number;
+
+  length?: number;
+  width?: number;
+  height?: number;
+  wheelBase?: number;
+  groundClearance?: number;
+  weight?: number;
+  turningRadius?: number;
+
+  frontType?: string;
+  backType?: string;
+  frontBrake?: string;
+  backBrake?: string;
+  frontSuspension?: string;
+  rearSuspension?: string;
+  tyreSizeFront?: string;
+  tyreSizeBack?: string;
+  tyreType?: string;
+  wheelMaterial?: string;
+
+  tankSize?: number;
+  numberOfGears?: number;
+
+  personCapacity?: number;
+  rows?: number;
+  doors?: number;
+  bootSpace?: number;
+
+  poweredSteering?: string | boolean;
+  steeringType?: string;
+  spare?: string | boolean;
+
+  airbags?: number;
+  hillAssist?: boolean;
+  rearViewCamera?: boolean;
+  parkingSensors?: boolean;
+  cruiseControl?: boolean;
+
+  displaySize?: number;
+  bluetooth?: boolean;
+  navigation?: boolean;
+  smartConnectivity?: boolean;
 };

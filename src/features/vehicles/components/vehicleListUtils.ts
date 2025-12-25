@@ -1,5 +1,5 @@
 import type { VehicleListItem } from "../types";
-import { BIKE_CATEGORIES, CAR_CATEGORIES } from "./vehicleFormOptions.ts";
+import { BIKE_CATEGORIES, CAR_CATEGORIES } from "./vehicleFormOptions";
 
 export type SortKey =
   | "brand"
@@ -24,9 +24,13 @@ function uniqSorted(list: string[]) {
   );
 }
 
-// Build once (not on every row)
-const BIKE_CATEGORY_SET = new Set<string>(BIKE_CATEGORIES as readonly string[]);
-const CAR_CATEGORY_SET = new Set<string>(CAR_CATEGORIES as readonly string[]);
+// normalize category sets to lowercase
+const BIKE_CATEGORY_SET = new Set(
+  (BIKE_CATEGORIES as readonly string[]).map((x) => String(x).trim().toLowerCase())
+);
+const CAR_CATEGORY_SET = new Set(
+  (CAR_CATEGORIES as readonly string[]).map((x) => String(x).trim().toLowerCase())
+);
 
 /**
  * If vehicleType is missing, infer it from category where possible.
@@ -36,11 +40,17 @@ export function getEffectiveVehicleType(v: VehicleListItem): "Bike" | "Car" | ""
   const raw = normStr(v.vehicleType);
   if (raw === "Bike" || raw === "Car") return raw;
 
-  const cat = normStr(v.category);
-  if (!cat) return "";
+  const catRaw = normStr(v.category);
+  if (!catRaw) return "";
+
+  const cat = catRaw.toLowerCase();
 
   if (BIKE_CATEGORY_SET.has(cat)) return "Bike";
   if (CAR_CATEGORY_SET.has(cat)) return "Car";
+
+  // fallback heuristic (safe)
+  if (cat.includes("suv") || cat.includes("hatch") || cat.includes("sedan")) return "Car";
+  if (cat.includes("bike") || cat.includes("scooter") || cat.includes("cruiser")) return "Bike";
 
   return "";
 }
@@ -95,9 +105,7 @@ export function applyFilters(
   let filtered = list;
 
   if (f.typeFilter !== "all") {
-    filtered = filtered.filter(
-      (v) => getEffectiveVehicleType(v) === f.typeFilter
-    );
+    filtered = filtered.filter((v) => getEffectiveVehicleType(v) === f.typeFilter);
   }
 
   if (f.brandFilter !== "all") {
@@ -105,9 +113,7 @@ export function applyFilters(
   }
 
   if (f.transFilter !== "all") {
-    filtered = filtered.filter(
-      (v) => normStr(v.transmission) === f.transFilter
-    );
+    filtered = filtered.filter((v) => normStr(v.transmission) === f.transFilter);
   }
 
   if (f.yearFilter !== "all") {
@@ -121,12 +127,7 @@ export function applyFilters(
       const variant = normStr(v.variant).toLowerCase();
       const slug = normStr(v.slug).toLowerCase();
 
-      return (
-        brand.includes(q) ||
-        model.includes(q) ||
-        variant.includes(q) ||
-        slug.includes(q)
-      );
+      return brand.includes(q) || model.includes(q) || variant.includes(q) || slug.includes(q);
     });
   }
 

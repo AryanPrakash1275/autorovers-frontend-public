@@ -1,6 +1,9 @@
-import { Footer } from "../../../public/Footer";
+import React from "react";
+import { Footer } from "../../../shared/ui/Footer";
 import type { VehicleListItem } from "../types";
-import type { SortDir, SortKey } from "./vehicleListUtils.ts";
+import type { SortDir, SortKey } from "./vehicleListUtils";
+import type { CompareState } from "../compareState";
+import { getCompareVehicleType } from "../compareState";
 
 interface VehicleTableProps {
   vehicles: VehicleListItem[];
@@ -9,6 +12,10 @@ interface VehicleTableProps {
   onSortChange: (key: SortKey) => void;
   onEdit: (vehicle: VehicleListItem) => void;
   onDelete: (id: number) => void;
+
+  //comparison wiring
+  compare: CompareState;
+  onToggleCompare: (v: VehicleListItem) => void;
 }
 
 const Th: React.FC<
@@ -48,6 +55,19 @@ function formatPrice(value: number | null | undefined) {
   return `₹${n.toLocaleString()}`;
 }
 
+function hasSlug(v: VehicleListItem): boolean {
+  return typeof v.slug === "string" && v.slug.trim().length > 0;
+}
+
+function computeLockedType(compare: CompareState): string | undefined {
+  if (compare.vehicleType && compare.vehicleType.trim().length) return compare.vehicleType;
+
+  // fallback: infer from first selected item (covers older localStorage or edge cases)
+  const first = compare.items[0];
+  if (!first) return undefined;
+  return getCompareVehicleType(first);
+}
+
 export function VehicleTable({
   vehicles,
   sortBy,
@@ -55,16 +75,26 @@ export function VehicleTable({
   onSortChange,
   onEdit,
   onDelete,
+  compare,
+  onToggleCompare,
 }: VehicleTableProps) {
   if (vehicles.length === 0) {
     return <p className="muted">No vehicles found.</p>;
   }
+
+  //  always compute a reliable locked type (even if compare.vehicleType is undefined)
+  const lockedType = computeLockedType(compare);
 
   return (
     <div className="admin-table-wrapper">
       <table className="admin-table">
         <thead>
           <tr>
+            {/* Compare column */}
+            <Th activeSortKey={sortBy} sortDir={sortDir}>
+              Compare
+            </Th>
+
             <Th activeSortKey={sortBy} sortDir={sortDir}>
               Id
             </Th>
@@ -148,38 +178,84 @@ export function VehicleTable({
         </thead>
 
         <tbody>
-          {vehicles.map((v) => (
-            <tr key={v.id}>
-              <Td>{v.id}</Td>
-              <Td>{v.brand ?? ""}</Td>
-              <Td>{v.model ?? ""}</Td>
-              <Td>{v.variant ?? ""}</Td>
-              <Td>{v.year ?? ""}</Td>
-              <Td>{formatPrice(v.price)}</Td>
-              <Td>{v.category ?? ""}</Td>
-              <Td>{v.transmission ?? ""}</Td>
+          {vehicles.map((v) => {
+            const selected = compare.items.some((x) => x.id === v.id);
 
-              {/* long slug safe */}
-              <Td>
-                <span className="break-anywhere" title={v.slug ?? ""}>
-                  {v.slug ?? ""}
-                </span>
-              </Td>
+            const incomingType = getCompareVehicleType(v);
 
-              <Td>
-                <button className="btn btn-sm" onClick={() => onEdit(v)}>
-                  Edit
-                </button>
-                <button
-                  className="btn btn-sm btn-danger"
-                  onClick={() => onDelete(v.id)}
-                  style={{ marginLeft: "0.4rem" }}
-                >
-                  Delete
-                </button>
-              </Td>
-            </tr>
-          ))}
+            const typeMismatch =
+              Boolean(lockedType) &&
+              Boolean(incomingType) &&
+              incomingType !== lockedType;
+
+            // hard rule: compare requires slug (ComparePage loads by slug)
+            const missingSlug = !hasSlug(v);
+
+            const disabled =
+              !selected &&
+              (missingSlug ||
+                !incomingType ||
+                compare.items.length >= 4 ||
+                typeMismatch);
+
+            const title = selected
+              ? "Remove from compare"
+              : missingSlug
+              ? "Cannot compare (missing slug)"
+              : !incomingType
+              ? "Cannot compare (unknown vehicle type from category)"
+              : compare.items.length >= 4
+              ? "Max 4 vehicles"
+              : typeMismatch
+              ? `Only same vehicle type allowed (${lockedType})`
+              : "Add to compare";
+
+            return (
+              <tr key={v.id}>
+                {/* Compare toggle */}
+                <Td>
+                  <button
+                    className={`btn btn-sm ${selected ? "" : "btn-ghost"}`}
+                    disabled={disabled}
+                    onClick={() => onToggleCompare(v)}
+                    title={title}
+                    aria-disabled={disabled}
+                  >
+                    {selected ? "✓" : "+"}
+                  </button>
+                </Td>
+
+                <Td>{v.id}</Td>
+                <Td>{v.brand ?? ""}</Td>
+                <Td>{v.model ?? ""}</Td>
+                <Td>{v.variant ?? ""}</Td>
+                <Td>{v.year ?? ""}</Td>
+                <Td>{formatPrice(v.price)}</Td>
+                <Td>{v.category ?? ""}</Td>
+                <Td>{v.transmission ?? ""}</Td>
+
+                {/* long slug safe */}
+                <Td>
+                  <span className="break-anywhere" title={v.slug ?? ""}>
+                    {v.slug ?? ""}
+                  </span>
+                </Td>
+
+                <Td>
+                  <button className="btn btn-sm" onClick={() => onEdit(v)}>
+                    Edit
+                  </button>
+                  <button
+                    className="btn btn-sm btn-danger"
+                    onClick={() => onDelete(v.id)}
+                    style={{ marginLeft: "0.4rem" }}
+                  >
+                    Delete
+                  </button>
+                </Td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
 

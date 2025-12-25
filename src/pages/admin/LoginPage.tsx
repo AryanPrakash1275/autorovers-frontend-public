@@ -1,9 +1,9 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
-import { login } from "../features/auth/api";
-import { Footer } from "./Footer";
-import { Logo } from "./Logo";
+import { login } from "../../features/auth/api";
+import { Footer } from "../../shared/ui/Footer";
+import { Logo } from "../../shared/ui/Logo";
 
 type LoginError = { message?: string };
 
