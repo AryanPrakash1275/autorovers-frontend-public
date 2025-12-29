@@ -4,9 +4,13 @@ const KEY = "autorovers_compare_v1";
 const EVENT_NAME = "autorovers:compare_changed";
 
 export type CompareState = {
-  vehicleType?: "Bike" | "Car"; 
+  vehicleType?: "Bike" | "Car";
   items: VehicleListItem[];
 };
+
+export type ToggleCompareResult =
+  | { ok: true; state: CompareState }
+  | { ok: false; reason: string; state: CompareState };
 
 type Obj = Record<string, unknown>;
 
@@ -20,10 +24,6 @@ function normType(v: unknown): "Bike" | "Car" | undefined {
   if (s === "car") return "Car";
   return undefined;
 }
-
-/* =========================
-   Category → Type inference
-   ========================= */
 
 const CAR_CATEGORIES = new Set(
   [
@@ -72,21 +72,19 @@ function inferTypeFromCategory(category?: string): "Bike" | "Car" | undefined {
   if (CAR_CATEGORIES.has(lc)) return "Car";
   if (BIKE_CATEGORIES.has(lc)) return "Bike";
 
-  // fallback heuristic
-  if (lc.includes("suv") || lc.includes("hatch") || lc.includes("sedan")) return "Car";
-  if (lc.includes("bike") || lc.includes("scooter") || lc.includes("cruiser")) return "Bike";
+  if (lc.includes("suv") || lc.includes("hatch") || lc.includes("sedan"))
+    return "Car";
+  if (lc.includes("bike") || lc.includes("scooter") || lc.includes("cruiser"))
+    return "Bike";
 
   return undefined;
 }
 
-/* =========================
-   Public helpers
-   ========================= */
-
-export function getCompareVehicleType(row: VehicleListItem): "Bike" | "Car" | undefined {
+export function getCompareVehicleType(
+  row: VehicleListItem
+): "Bike" | "Car" | undefined {
   const o = row as unknown as Obj;
 
-  // prefer explicit signals
   const vt = normType(o["vehicleType"]);
   if (vt) return vt;
 
@@ -96,7 +94,6 @@ export function getCompareVehicleType(row: VehicleListItem): "Bike" | "Car" | un
   const type = normType(o["type"]);
   if (type) return type;
 
-  // fallback to category
   const cat = readString(o["category"]);
   return inferTypeFromCategory(cat);
 }
@@ -113,10 +110,13 @@ export function loadCompare(): CompareState {
       ? getCompareVehicleType(parsed.items[0])
       : undefined;
 
-    return {
-      vehicleType: inferredType,
-      items: parsed.items,
-    };
+    const storedType = normType((parsed as unknown as Obj)["vehicleType"]);
+    const vehicleType =
+      inferredType && storedType && inferredType !== storedType
+        ? inferredType
+        : storedType ?? inferredType;
+
+    return { vehicleType, items: parsed.items };
   } catch {
     return { items: [] };
   }
@@ -124,12 +124,12 @@ export function loadCompare(): CompareState {
 
 export function saveCompare(state: CompareState) {
   localStorage.setItem(KEY, JSON.stringify(state));
-
-  //  same-tab reactivity
   window.dispatchEvent(new CustomEvent(EVENT_NAME, { detail: state }));
 }
 
-export function onCompareChanged(cb: (state: CompareState) => void): () => void {
+export function onCompareChanged(
+  cb: (state: CompareState) => void
+): () => void {
   const handler = (e: Event) => {
     const ce = e as CustomEvent<CompareState>;
     cb(ce.detail ?? loadCompare());
@@ -139,10 +139,12 @@ export function onCompareChanged(cb: (state: CompareState) => void): () => void 
   return () => window.removeEventListener(EVENT_NAME, handler);
 }
 
-export function toggleCompare(state: CompareState, vehicle: VehicleListItem): CompareState {
+export function toggleCompareWithResult(
+  state: CompareState,
+  vehicle: VehicleListItem
+): ToggleCompareResult {
   const exists = state.items.some((v) => v.id === vehicle.id);
 
-  // remove
   if (exists) {
     const items = state.items.filter((v) => v.id !== vehicle.id);
     const next: CompareState = {
@@ -150,23 +152,36 @@ export function toggleCompare(state: CompareState, vehicle: VehicleListItem): Co
       items,
     };
     saveCompare(next);
-    return next;
+    return { ok: true, state: next };
   }
 
-  // add — max 4
-  if (state.items.length >= 4) return state;
+  if (state.items.length >= 4) {
+    return { ok: false, reason: "You can compare up to 4 vehicles.", state };
+  }
 
   const incomingType = getCompareVehicleType(vehicle);
-  if (!incomingType) return state;
+  if (!incomingType) {
+    return { ok: false, reason: "Vehicle type missing.", state };
+  }
 
   if (state.items.length === 0) {
     const next: CompareState = { vehicleType: incomingType, items: [vehicle] };
     saveCompare(next);
-    return next;
+    return { ok: true, state: next };
   }
 
   const lockedType = state.vehicleType ?? getCompareVehicleType(state.items[0]);
-  if (!lockedType || incomingType !== lockedType) return state;
+  if (!lockedType) {
+    return { ok: false, reason: "Compare session type missing.", state };
+  }
+
+  if (incomingType !== lockedType) {
+    return {
+      ok: false,
+      reason: `You can only compare ${lockedType}s together.`,
+      state,
+    };
+  }
 
   const next: CompareState = {
     vehicleType: lockedType,
@@ -174,7 +189,11 @@ export function toggleCompare(state: CompareState, vehicle: VehicleListItem): Co
   };
 
   saveCompare(next);
-  return next;
+  return { ok: true, state: next };
+}
+
+export function toggleCompare(state: CompareState, vehicle: VehicleListItem): CompareState {
+  return toggleCompareWithResult(state, vehicle).state;
 }
 
 export function clearCompare(): CompareState {

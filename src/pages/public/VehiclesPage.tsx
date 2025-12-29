@@ -5,7 +5,7 @@ import type { VehicleListItem } from "../../features/vehicles/types";
 import { getPublicVehicles } from "../../features/vehicles/api";
 import {
   loadCompare,
-  toggleCompare,
+  toggleCompareWithResult,
   clearCompare,
   onCompareChanged,
 } from "../../features/vehicles/compareState";
@@ -39,10 +39,6 @@ const HERO_IMG =
 const FALLBACK_IMG =
   "https://dummyimage.com/600x400/cccccc/000000&text=No+Image";
 
-/* =========================
-   Safe helpers
-========================= */
-
 function safeStr(v: unknown) {
   return typeof v === "string" ? v : "";
 }
@@ -72,10 +68,6 @@ function roundToNearest(n: number, step: number) {
   if (!Number.isFinite(n) || n <= 0) return 0;
   return Math.round(n / step) * step;
 }
-
-/* =========================
-   Type helpers
-========================= */
 
 function norm(v: unknown) {
   return typeof v === "string" ? v.trim().toLowerCase() : "";
@@ -125,10 +117,6 @@ function getBadges(v: VehicleListItem, maxYear: number) {
   return badges.slice(0, 2);
 }
 
-/* =========================
-   Page
-========================= */
-
 export function VehiclesPage() {
   const nav = useNavigate();
 
@@ -140,7 +128,6 @@ export function VehiclesPage() {
     getSelectedVehicleType()
   );
 
-  // Canonical URL behavior (Block C)
   useEffect(() => {
     const stored = getSelectedVehicleType();
 
@@ -173,28 +160,22 @@ export function VehiclesPage() {
 
   const [compare, setCompare] = useState(loadCompare());
 
-  // UI lock to current type (still enforced by typedVehicles anyway)
   useEffect(() => {
     if (!selectedType) return;
     setCategory(selectedType === "bike" ? "bike" : "car");
   }, [selectedType]);
 
-  //Switch handler (fixes your "stuck on browse bikes" issue)
   function switchType(next: VehicleType) {
-    // no-op
     if (selectedType === next) return;
 
-    // update storage for global consistency (header uses it too)
     setSelectedVehicleType(next);
 
-    // clear compare when switching type to avoid mixed compare state
     const currentCompare = loadCompare();
     if (currentCompare.items.length > 0) {
       const cleared = clearCompare();
       setCompare(cleared);
     }
 
-    // canonical URL change (this triggers the canonical effect above)
     nav(`/vehicles?type=${next}`, { replace: true });
   }
 
@@ -422,10 +403,13 @@ export function VehiclesPage() {
     e.preventDefault();
     e.stopPropagation();
 
-    const next = toggleCompare(loadCompare(), v);
-    setCompare(next);
+    const cur = loadCompare();
+    const res = toggleCompareWithResult(cur, v);
 
-    if (compare.items.length === 0) {
+    setCompare(res.state);
+    if (!res.ok) window.alert(res.reason);
+
+    if (cur.items.length === 0 && res.ok && res.state.items.length > 0) {
       setTimeout(() => {
         document.querySelector(".compare-bar")?.scrollIntoView({
           behavior: "smooth",
@@ -451,7 +435,6 @@ export function VehiclesPage() {
 
   return (
     <div className={`public-page ${compareCount ? "has-comparebar" : ""}`}>
-      {/* quick switch (no browse bikes/cars confusion) */}
       <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 10 }}>
         <div className="type-switch">
           <button
@@ -901,7 +884,6 @@ export function VehiclesPage() {
           <div>
             <div className="compare-bar-title">Compare: {compareCount}/4</div>
 
-            {/*  CHANGED COPY ONLY */}
             <div className="compare-bar-subtitle">
               {compareCount < 2 ? "Add 1 more to compare" : "Ready — compare specs side-by-side"}
             </div>
@@ -917,7 +899,6 @@ export function VehiclesPage() {
               disabled={compareCount < 2}
               title={compareCount < 2 ? "Add at least 2 vehicles to compare" : "Open compare"}
             >
-              {/*CHANGED COPY ONLY */}
               {compareCount < 2 ? "Add one more" : "Compare now"}
             </button>
           </div>
