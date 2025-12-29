@@ -123,6 +123,21 @@ function isPagedVehicleList(x: unknown): x is PagedResult<VehicleListItem> {
   );
 }
 
+const DEFAULT_PAGE_SIZE = 24;
+const MAX_PAGE_SIZE = 60;
+
+function clampPage(n: unknown): number {
+  const v = typeof n === "number" ? n : Number(n);
+  if (!Number.isFinite(v) || v < 1) return 1;
+  return Math.floor(v);
+}
+
+function clampPageSize(n: unknown): number {
+  const v = typeof n === "number" ? n : Number(n);
+  if (!Number.isFinite(v) || v < 1) return DEFAULT_PAGE_SIZE;
+  return Math.min(MAX_PAGE_SIZE, Math.floor(v));
+}
+
 // ===== ADMIN LIST =====
 export async function getVehicles(): Promise<VehicleListItem[]> {
   return apiGet<VehicleListItem[]>(ADMIN_VEHICLES_PATH);
@@ -161,21 +176,25 @@ export function updateVehicleDetails(
 
 // ===== PUBLIC LIST (PAGED) =====
 export async function getPublicVehicles(
-  query?: PublicVehiclesQuery
+  query: PublicVehiclesQuery
 ): Promise<PagedResult<VehicleListItem>> {
-  const q = query ?? {};
+  const type = query.type?.trim();
+  if (!type) throw new Error("PublicVehiclesQuery.type is required");
+
+  const page = clampPage(query.page);
+  const pageSize = clampPageSize(query.pageSize);
 
   const qs = toQueryString({
-    type: q.type,
-    q: q.q,
-    brand: q.brand,
-    category: q.category,
-    fuelType: q.fuelType,
-    minPrice: q.minPrice,
-    maxPrice: q.maxPrice,
-    sort: q.sort,
-    page: q.page,
-    pageSize: q.pageSize,
+    type,
+    q: query.q,
+    brand: query.brand,
+    category: query.category,
+    fuelType: query.fuelType,
+    minPrice: query.minPrice,
+    maxPrice: query.maxPrice,
+    sort: query.sort,
+    page,
+    pageSize,
   });
 
   const raw = await apiGet<unknown>(`${PUBLIC_VEHICLES_PATH}${qs}`);
@@ -183,15 +202,12 @@ export async function getPublicVehicles(
   // backward-compat: if API returns array
   if (Array.isArray(raw)) {
     const items = raw as VehicleListItem[];
-    const page = q.page && q.page > 0 ? q.page : 1;
-    const pageSize = q.pageSize && q.pageSize > 0 ? q.pageSize : items.length || 24;
     return { items, page, pageSize, totalCount: items.length };
   }
 
   if (isPagedVehicleList(raw)) return raw;
 
-  // last resort
-  return { items: [], page: 1, pageSize: q.pageSize ?? 24, totalCount: 0 };
+  return { items: [], page, pageSize, totalCount: 0 };
 }
 
 // ===== PUBLIC DETAILS =====

@@ -5,6 +5,9 @@
  */
 export type VehicleType = "bike" | "car";
 
+/**
+ * Keep FuelType open for backend evolution, but still document known values.
+ */
 export type FuelType = "Petrol" | "Diesel" | "EV" | "Hybrid" | string;
 
 /**
@@ -18,22 +21,28 @@ export type PagedResult<T> = {
 };
 
 /**
- * Public list query
+ * Public list query (locked)
+ * NOTE: `type` is required everywhere (no silent mixed/undefined type calls).
  */
-export type PublicVehiclesQuery = Partial<{
+export type PublicVehiclesQuery = {
   type: VehicleType; // bike|car
-  q: string;
-  brand: string;
-  category: string;
-  fuelType: FuelType | string;
 
-  minPrice: number;
-  maxPrice: number;
+  q?: string;
+  brand?: string;
+  category?: string;
+  fuelType?: FuelType;
 
-  sort: "priceAsc" | "priceDesc" | "yearAsc" | "yearDesc";
-  page: number; // 1-based
-  pageSize: number;
-}>;
+  minPrice?: number;
+  maxPrice?: number;
+
+  /**
+   * Allow known sorts, but keep forward-compatible with backend additions.
+   */
+  sort?: "priceAsc" | "priceDesc" | "yearAsc" | "yearDesc" | (string & {});
+
+  page?: number; // 1-based
+  pageSize?: number;
+};
 
 /**
  * Variant + Addon DTOs (public read)
