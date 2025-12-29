@@ -1,3 +1,5 @@
+// src/features/vehicles/mapToComparisonVehicle.ts
+
 import type { VehicleWithDetailsDto, VehicleType } from "./types";
 import {
   type ComparisonMapResult,
@@ -15,7 +17,10 @@ function resolveVehicleType(dto: VehicleWithDetailsDto): VehicleType {
 
   const inferred = inferTypeFromCategory(dto.category ?? null);
   if (inferred) return inferred;
-  return "Bike";
+
+  // IMPORTANT: don't silently force "bike" (causes type-lock bugs)
+  // If backend can't provide vehicleType/category isn't inferable, it's not publishable.
+  throw new Error("Missing vehicleType");
 }
 
 function safeVariant(dto: VehicleWithDetailsDto): string {
@@ -63,7 +68,6 @@ export function mapToComparisonVehicle(dto: VehicleWithDetailsDto): ComparisonMa
     const imageUrl = requiredStr(dto.imageUrl, "imageUrl");
     const transmission = requiredStr(dto.transmission, "transmission");
 
-    // soft decision fields (so compare always renders even with {} details)
     const price = softNum(dto.price);
     const powertrain = normalizePowertrain(dto);
 
@@ -82,7 +86,6 @@ export function mapToComparisonVehicle(dto: VehicleWithDetailsDto): ComparisonMa
         ? softNum(dto.details?.ev?.motorTorque ?? dto.details?.engine?.torque)
         : softNum(dto.details?.engine?.torque);
 
-    // soft extras
     const warrantyYears = softNum(dto.details?.warrantyYears);
     const serviceIntervalKm = softNum(dto.details?.serviceIntervalKm);
 
@@ -95,7 +98,6 @@ export function mapToComparisonVehicle(dto: VehicleWithDetailsDto): ComparisonMa
       year,
       category,
       imageUrl,
-
       price,
       mileageOrRange,
       power,
@@ -106,12 +108,12 @@ export function mapToComparisonVehicle(dto: VehicleWithDetailsDto): ComparisonMa
       serviceIntervalKm,
     };
 
-    if (vehicleType === "Bike") {
+    if (vehicleType === "bike") {
       const kerbWeightKg = softNum(dto.details?.dimensions?.weight);
       const fuelTankCapacityL = softNum(dto.details?.bike?.tankSize);
 
       const bike: ComparisonBike = {
-        vehicleType: "Bike",
+        vehicleType: "bike",
         ...base,
         kerbWeightKg,
         fuelTankCapacityL,
@@ -123,7 +125,7 @@ export function mapToComparisonVehicle(dto: VehicleWithDetailsDto): ComparisonMa
     const bootSpaceL = softNum(dto.details?.car?.bootSpace);
 
     const car: ComparisonCar = {
-      vehicleType: "Car",
+      vehicleType: "car",
       ...base,
       bodyType,
       bootSpaceL,

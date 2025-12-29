@@ -1,4 +1,39 @@
-export type VehicleType = "Bike" | "Car";
+// src/features/vehicles/types.ts
+
+/**
+ * Public API returns: "bike" | "car"
+ */
+export type VehicleType = "bike" | "car";
+
+export type FuelType = "Petrol" | "Diesel" | "EV" | "Hybrid" | string;
+
+/**
+ * Generic paged result
+ */
+export type PagedResult<T> = {
+  items: T[];
+  page: number; // 1-based
+  pageSize: number;
+  totalCount: number;
+};
+
+/**
+ * Public list query
+ */
+export type PublicVehiclesQuery = Partial<{
+  type: VehicleType; // bike|car
+  q: string;
+  brand: string;
+  category: string;
+  fuelType: FuelType | string;
+
+  minPrice: number;
+  maxPrice: number;
+
+  sort: "priceAsc" | "priceDesc" | "yearAsc" | "yearDesc";
+  page: number; // 1-based
+  pageSize: number;
+}>;
 
 /**
  * Variant + Addon DTOs (public read)
@@ -25,7 +60,7 @@ export type EngineSpecsDto = Partial<{
   engineDisplacement: number;
   inductionType: string;
   emission: string;
-  fuelType: string;
+  fuelType: FuelType;
 
   power: number;
   powerRpm: number;
@@ -116,16 +151,13 @@ export type CarSpecsDto = Partial<{
 
 /**
  * Backend nested details DTO (PUBLIC contract)
- * NOTE: no legacy flat fields like autoStartStop, spare, etc.
  */
 export type VehicleDetailsDto = {
-  // ===== stable fields =====
   description?: string;
   colorsAvailableJson?: string;
   warrantyYears?: number;
   serviceIntervalKm?: number;
 
-  // ===== nested (primary contract) =====
   engine?: EngineSpecsDto | null;
   ev?: EvSpecsDto | null;
   dimensions?: DimensionsSpecsDto | null;
@@ -133,11 +165,11 @@ export type VehicleDetailsDto = {
   bike?: BikeSpecsDto | null;
   car?: CarSpecsDto | null;
 
-  // ===== legacy flat mirrors (READ-ONLY SUPPORT) =====
+  // legacy mirrors (read-only compatibility)
   engineType?: string;
   inductionType?: string;
   emission?: string;
-  fuelType?: string;
+  fuelType?: FuelType;
 
   power?: number;
   powerRpm?: number;
@@ -170,14 +202,9 @@ export type VehicleDetailsDto = {
   spare?: string | boolean;
 };
 
-/**
- * Backend response for /api/Vehicles/slug/{slug}
- * (core vehicle + nested details + variants)
- */
 export type VehicleWithDetailsDto = {
   id: number;
 
-  vehicleType?: VehicleType | string;
   brand?: string;
   model?: string;
   variant?: string;
@@ -189,30 +216,33 @@ export type VehicleWithDetailsDto = {
   slug?: string;
   imageUrl?: string;
 
-  details?: VehicleDetailsDto;
+  vehicleType?: VehicleType | string;
+  fuelType?: FuelType;
+
+  details?: VehicleDetailsDto | null;
   variants?: VehicleVariantDto[];
 };
 
-/**
- * Public list cards
- */
 export type VehicleListItem = {
   id: number;
-  vehicleType?: VehicleType | string;
+
   brand?: string;
   model?: string;
   variant?: string;
   year?: number;
   price?: number;
+
   category?: string;
   transmission?: string;
   slug?: string;
   imageUrl?: string;
+
+  vehicleType?: VehicleType | string;
+  fuelType?: FuelType;
 };
 
 /**
- * Admin/UI "form model" (LEGACY FLAT)
- * VehicleListPage / VehicleForm / VehicleMapper rely on this.
+ * Admin/UI legacy flat model
  */
 export type Vehicle = {
   id: number;
@@ -237,7 +267,7 @@ export type Vehicle = {
 
   engineType?: string;
   engineDisplacement?: number;
-  fuelType?: string;
+  fuelType?: FuelType;
   specification?: string;
   inductionType?: string;
   power?: number;

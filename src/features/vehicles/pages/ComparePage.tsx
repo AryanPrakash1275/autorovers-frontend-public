@@ -1,3 +1,5 @@
+// src/features/vehicles/pages/ComparePage.tsx
+
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 
@@ -7,14 +9,12 @@ import {
   onCompareChanged,
   clearCompare,
   type CompareState,
+  type CompareVehicleType,
 } from "../compareState";
 import { getPublicVehicleBySlug } from "../api";
-import type { VehicleWithDetailsDto, VehicleType, VehicleListItem } from "../types";
+import type { VehicleWithDetailsDto, VehicleListItem } from "../types";
 
-import {
-  getComparisonRowsForType,
-  type ComparisonVehicle,
-} from "../comparisonContract";
+import { getComparisonRowsForType, type ComparisonVehicle } from "../comparisonContract";
 import { mapToComparisonVehicle } from "../mapToComparisonVehicle";
 import {
   getSelectedVehicleType,
@@ -67,31 +67,62 @@ function uniqMax4(slugs: string[]): string[] {
 }
 
 /* =========================
+   Type normalizers
+========================= */
+
+type ContractVehicleType = "Bike" | "Car";
+
+function toCompareType(v: unknown): CompareVehicleType | undefined {
+  if (v === "bike" || v === "car") return v;
+
+  if (v === "Bike") return "bike";
+  if (v === "Car") return "car";
+
+  if (typeof v === "string") {
+    const t = v.trim().toLowerCase();
+    if (t === "bike") return "bike";
+    if (t === "car") return "car";
+  }
+
+  return undefined;
+}
+
+function toContractType(v: CompareVehicleType): ContractVehicleType {
+  return v === "bike" ? "Bike" : "Car";
+}
+
+/* =========================
    Helpers
 ========================= */
 
 function sanitizeStateFromSlugs(
   prev: CompareState,
   keepSlugs: Set<string>,
-  lockedType?: VehicleType
+  lockedType?: CompareVehicleType
 ): CompareState {
   const nextItems = prev.items.filter((x) => !!x.slug && keepSlugs.has(x.slug));
   if (nextItems.length === 0) return { items: [] };
   return { items: nextItems, vehicleType: lockedType };
 }
 
+function labelPlural(t: CompareVehicleType): string {
+  return t === "bike" ? "Bikes" : "Cars";
+}
+
+function labelSingular(t: CompareVehicleType): string {
+  return t === "bike" ? "Bike" : "Car";
+}
+
 /** tiny helper for "decision rows first" without touching comparisonContract */
 function decisionRowScore(label: string): number {
   const t = label.trim().toLowerCase();
 
-  // strongest decision drivers up top
   if (t.includes("price")) return 0;
   if (t.includes("power")) return 1;
   if (t.includes("torque")) return 2;
   if (t.includes("mileage") || t.includes("kmpl") || t.includes("efficien")) return 3;
   if (t.includes("range")) return 4;
 
-  // other common decision-ish rows
   if (t.includes("engine") || t.includes("displacement") || t.includes("motor")) return 10;
   if (t.includes("0-") || t.includes("accel") || t.includes("top speed")) return 11;
 
@@ -106,10 +137,10 @@ export function ComparePage() {
 
   const [loading, setLoading] = useState(true);
   const [dtos, setDtos] = useState<VehicleWithDetailsDto[]>([]);
-  const [vehicleType, setVehicleType] = useState<VehicleType | undefined>();
+  const [vehicleType, setVehicleType] = useState<CompareVehicleType | undefined>();
   const [err, setErr] = useState<string | null>(null);
 
-  //  reactive selected type (Browse/Add-more always correct)
+  // reactive selected type (Browse/Add-more always correct)
   const [selectedType, setSelectedType] = useState<StoredVehicleType | undefined>(() =>
     getSelectedVehicleType()
   );
@@ -140,7 +171,11 @@ export function ComparePage() {
     return () => off();
   }, []);
 
-  const browseTo = selectedType ? `/vehicles?type=${selectedType}` : "/";
+  // ✅ IMPORTANT: fallback type so "Add more" never dumps user back to "/"
+  const effectiveBrowseType: CompareVehicleType | undefined =
+    selectedType ?? compare.vehicleType ?? vehicleType;
+
+  const browseTo = effectiveBrowseType ? `/vehicles?type=${effectiveBrowseType}` : "/";
 
   function handleRemove(slug?: string | null) {
     if (!slug) return;
@@ -152,12 +187,10 @@ export function ComparePage() {
       nextItems.length === 0 ? { items: [] } : { ...cur, items: nextItems };
 
     saveCompare(next);
-    // NOTE: saveCompare emits same-tab event → onCompareChanged updates state.
   }
 
   function handleClearAll() {
     clearCompare();
-    // same-tab event updates state
   }
 
   function handleAddMore() {
@@ -179,19 +212,15 @@ export function ComparePage() {
   }
 
   /* =====================================================
-     (0) Stable slug key for effects
-     - keeps deps tight
-     - prevents URL loops on id patches / reorder
+     Stable slug key for effects
   ===================================================== */
   const compareSlugKey = useMemo(() => {
     const slugs = uniqMax4(
       compare.items.map((x) => normalizeSlug(x.slug)).filter(Boolean) as string[]
     );
-    // Use a delimiter that will never appear in slugs
     return slugs.join("|");
   }, [compare.items]);
 
-  // raw count (for UI hint) — we still *render only first 4* via uniqMax4 everywhere
   const rawCompareCount = useMemo(() => {
     const slugs = compare.items
       .map((x) => normalizeSlug(x.slug))
@@ -202,8 +231,7 @@ export function ComparePage() {
   const overLimit = rawCompareCount > 4;
 
   /* =====================================================
-     (1) URL -> Compare hydration
-     /compare?slugs=a,b,c loads those once
+     (1) URL -> Compare hydration (RUN ONCE)
   ===================================================== */
   useEffect(() => {
     if (urlHydratedOnce.current) return;
@@ -212,34 +240,23 @@ export function ComparePage() {
     const slugsFromUrl = uniqMax4(decodeSlugs(raw));
 
     lastUrlSlugs.current = encodeSlugs(slugsFromUrl);
+    urlHydratedOnce.current = true;
 
-    // URL doesn't specify enough slugs → let localStorage drive
-    if (slugsFromUrl.length < 2) {
-      urlHydratedOnce.current = true;
-      return;
-    }
+    if (slugsFromUrl.length < 2) return;
 
-    // minimal objects (only slug needed initially)
     const minimalItems: VehicleListItem[] = slugsFromUrl.map(
       (s) => ({ id: 0, slug: s } as unknown as VehicleListItem)
     );
 
-    const next: CompareState = { items: minimalItems };
-
-    // no setState inside effect needed:
-    // saveCompare emits same-tab event → our onCompareChanged listener will setCompare.
-    saveCompare(next);
-
-    urlHydratedOnce.current = true;
+    saveCompare({ items: minimalItems });
   }, [searchParams]);
 
   /* =====================================================
      (2) Compare -> URL (always shareable)
-     IMPORTANT:
-     - driven ONLY by compareSlugKey to avoid loops
-     - uses functional setSearchParams so we don't depend on searchParams
   ===================================================== */
   useEffect(() => {
+    if (!urlHydratedOnce.current) return;
+
     const slugs = compareSlugKey ? compareSlugKey.split("|") : [];
     const encoded = encodeSlugs(slugs);
 
@@ -273,19 +290,7 @@ export function ComparePage() {
         setLoading(true);
         setErr(null);
 
-        if (compare.items.length < 2) {
-          setDtos([]);
-          setVehicleType(undefined);
-          setLoading(false);
-          return;
-        }
-
-        const slugs = uniqMax4(
-          compare.items
-            .map((x) => x.slug)
-            .filter((s): s is string => typeof s === "string" && s.trim().length > 0)
-        );
-
+        const slugs = compareSlugKey ? compareSlugKey.split("|") : [];
         if (slugs.length < 2) {
           setDtos([]);
           setVehicleType(undefined);
@@ -293,9 +298,7 @@ export function ComparePage() {
           return;
         }
 
-        const settled = await Promise.allSettled(
-          slugs.map((slug) => getPublicVehicleBySlug(slug))
-        );
+        const settled = await Promise.allSettled(slugs.map((slug) => getPublicVehicleBySlug(slug)));
 
         const ok: VehicleWithDetailsDto[] = [];
         const failedSlugs: string[] = [];
@@ -307,31 +310,17 @@ export function ComparePage() {
 
         const publishable: VehicleWithDetailsDto[] = [];
         const publishableSlugs = new Set<string>();
-        let lockedType: VehicleType | undefined;
+        let lockedType: CompareVehicleType | undefined;
 
         for (const dto of ok) {
           const mapped = mapToComparisonVehicle(dto);
+          if (!mapped.ok) continue;
 
-          if (!mapped.ok) {
-            console.warn(
-              `NOT PUBLISHABLE | slug=${String(dto.slug)} | reason=${mapped.reason} | type=${String(
-                dto.vehicleType
-              )} | cat=${String(dto.category)}`
-            );
-            continue;
-          }
+          const t = toCompareType(mapped.value.vehicleType);
+          if (!t) continue;
 
-          const t = mapped.value.vehicleType;
           if (!lockedType) lockedType = t;
-
-          if (t !== lockedType) {
-            console.warn("TYPE MISMATCH DROP:", {
-              slug: mapped.value.slug,
-              got: t,
-              locked: lockedType,
-            });
-            continue;
-          }
+          if (t !== lockedType) continue;
 
           publishable.push(dto);
           publishableSlugs.add(mapped.value.slug);
@@ -346,11 +335,9 @@ export function ComparePage() {
         const shouldSanitize = failedSlugs.length > 0 || publishable.length !== ok.length;
 
         if (shouldSanitize) {
-          // sanitize storage + state once
           const prev = loadCompare();
           const next = sanitizeStateFromSlugs(prev, publishableSlugs, lockedType);
 
-          // patch ids from fetched DTOs (optional but helps keys / remove buttons)
           const idBySlug = new Map<string, number>();
           for (const d of publishable) {
             if (typeof d.slug === "string" && typeof d.id === "number") {
@@ -364,7 +351,7 @@ export function ComparePage() {
             return id ? { ...it, id } : it;
           });
 
-          saveCompare(next); // emits event → setCompare
+          saveCompare(next);
         }
       } catch (e: unknown) {
         if (!cancelled) {
@@ -378,14 +365,15 @@ export function ComparePage() {
     return () => {
       cancelled = true;
     };
-  }, [compare.items, compare.vehicleType]);
+  }, [compareSlugKey]);
 
   const rows = useMemo(() => {
     if (!vehicleType) return [];
-    const base = getComparisonRowsForType(vehicleType);
 
-    // Decision-grade ordering (without touching the contract):
-    // stable sort by a label-based heuristic, keep original order as tie-breaker.
+    // ✅ convert app compare type ("bike"|"car") -> contract type ("Bike"|"Car")
+    const contractType = toContractType(vehicleType);
+    const base = getComparisonRowsForType(contractType);
+
     return base
       .map((r, idx) => ({ r, idx }))
       .sort((a, b) => {
@@ -449,7 +437,7 @@ export function ComparePage() {
         <div>
           <h1 className="public-title">Compare</h1>
           <p className="public-subtitle">
-            Comparing {mappedVehicles.length} {vehicleType}
+            Comparing {mappedVehicles.length} {labelPlural(vehicleType)}
             {overLimit ? " (showing first 4)" : ""}
           </p>
 
@@ -546,6 +534,10 @@ export function ComparePage() {
             ))}
           </tbody>
         </table>
+      </div>
+
+      <div style={{ marginTop: 12 }}>
+        <div className="public-subtitle">Type locked: {labelSingular(vehicleType)}</div>
       </div>
     </div>
   );

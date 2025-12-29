@@ -1,14 +1,18 @@
+// src/features/vehicles/comparisonContract.ts
+
 import type { VehicleType } from "./types";
 
 /* =========================
    Core Types (DISCRIMINATED UNION)
 ========================= */
 
+type ContractVehicleType = "Bike" | "Car";
+
 type ComparisonBase = {
   id: number;
   slug: string;
 
-  // header display (not part of 12 rows)
+  // header display
   brand: string;
   model: string;
   variant: string;
@@ -29,21 +33,15 @@ type ComparisonBase = {
   serviceIntervalKm: number;
 };
 
-export function dashIfZero(v: unknown): string {
-  return typeof v === "number" && Number.isFinite(v) && v > 0 ? String(v) : "—";
-}
-
 export type ComparisonBike = ComparisonBase & {
   vehicleType: "Bike";
-  // Bike-only (2)
   kerbWeightKg: number;
   fuelTankCapacityL: number;
 };
 
 export type ComparisonCar = ComparisonBase & {
   vehicleType: "Car";
-  // Car-only (2)
-  bodyType: string; // deterministic: from category
+  bodyType: string;
   bootSpaceL: number;
 };
 
@@ -73,6 +71,10 @@ export type ComparisonFieldRow = {
   get: (v: ComparisonVehicle) => string;
 };
 
+/* =========================
+   Formatters
+========================= */
+
 function fmtMoneyINR(n: number): string {
   return `₹ ${Math.round(n).toLocaleString("en-IN")}`;
 }
@@ -85,12 +87,11 @@ function fmtOneDecimal(n: number): string {
   return (Math.round(n * 10) / 10).toString();
 }
 
-/**
- * Exactly 12 rows, in order.
- * Shared fields ALWAYS on top.
- * Type-specific fields appended conditionally.
- */
-export const COMPARISON_FIELDS_SHARED: ComparisonFieldRow[] = [
+/* =========================
+   Shared + Type-specific rows
+========================= */
+
+export const COMPARISON_FIELDS_SHARED: readonly ComparisonFieldRow[] = [
   { key: "price", label: "Price (ex-showroom)", get: (v) => fmtMoneyINR(v.price) },
   {
     key: "mileageOrRange",
@@ -112,7 +113,7 @@ export const COMPARISON_FIELDS_SHARED: ComparisonFieldRow[] = [
   },
 ];
 
-export const COMPARISON_FIELDS_BIKE: ComparisonFieldRow[] = [
+export const COMPARISON_FIELDS_BIKE: readonly ComparisonFieldRow[] = [
   {
     key: "kerbWeightKg",
     label: "Kerb Weight",
@@ -126,7 +127,7 @@ export const COMPARISON_FIELDS_BIKE: ComparisonFieldRow[] = [
   },
 ];
 
-export const COMPARISON_FIELDS_CAR: ComparisonFieldRow[] = [
+export const COMPARISON_FIELDS_CAR: readonly ComparisonFieldRow[] = [
   {
     key: "bodyType",
     label: "Body Type",
@@ -139,26 +140,59 @@ export const COMPARISON_FIELDS_CAR: ComparisonFieldRow[] = [
   },
 ];
 
-export function getComparisonRowsForType(vehicleType: VehicleType): ComparisonFieldRow[] {
-  if (vehicleType === "Bike") {
+/* =========================
+   Canonical type adapter
+========================= */
+
+/**
+ * Accepts:
+ * - public canonical: "bike" | "car"
+ * - internal legacy:  "Bike" | "Car"
+ *
+ * Returns strict contract type only.
+ */
+function toContractType(
+  v: VehicleType | ContractVehicleType
+): ContractVehicleType {
+  if (v === "Bike" || v === "Car") return v;
+  return v === "bike" ? "Bike" : "Car";
+}
+
+/* =========================
+   Public API
+========================= */
+
+/**
+ * Exactly 12 rows.
+ * Shared rows first.
+ * Type-specific rows appended.
+ */
+export function getComparisonRowsForType(
+  vehicleType: VehicleType | ContractVehicleType
+): ComparisonFieldRow[] {
+  const t = toContractType(vehicleType);
+
+  if (t === "Bike") {
     return [...COMPARISON_FIELDS_SHARED, ...COMPARISON_FIELDS_BIKE];
   }
   return [...COMPARISON_FIELDS_SHARED, ...COMPARISON_FIELDS_CAR];
 }
 
 /* =========================
-   Strict mapping helpers
+   Mapping helpers
 ========================= */
 
 export type ComparisonMapResult =
   | { ok: true; value: ComparisonVehicle }
   | { ok: false; reason: string };
 
-export function isVehicleType(v: unknown): v is VehicleType {
+export function isVehicleType(v: unknown): v is ContractVehicleType {
   return v === "Bike" || v === "Car";
 }
 
-export function inferTypeFromCategory(category?: string | null): VehicleType | undefined {
+export function inferTypeFromCategory(
+  category?: string | null
+): ContractVehicleType | undefined {
   const raw = (category ?? "").trim().toLowerCase();
   if (!raw) return undefined;
 
@@ -176,6 +210,7 @@ export function inferTypeFromCategory(category?: string | null): VehicleType | u
     "truck",
     "van",
   ]);
+
   const bike = new Set([
     "naked",
     "classic",

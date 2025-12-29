@@ -1,10 +1,14 @@
+// src/features/vehicles/compareState.ts
+
 import type { VehicleListItem } from "./types";
 
 const KEY = "autorovers_compare_v1";
 const EVENT_NAME = "autorovers:compare_changed";
 
+export type CompareVehicleType = "bike" | "car";
+
 export type CompareState = {
-  vehicleType?: "Bike" | "Car";
+  vehicleType?: CompareVehicleType;
   items: VehicleListItem[];
 };
 
@@ -18,10 +22,10 @@ function readString(v: unknown): string | undefined {
   return typeof v === "string" && v.trim().length ? v.trim() : undefined;
 }
 
-function normType(v: unknown): "Bike" | "Car" | undefined {
+function normType(v: unknown): CompareVehicleType | undefined {
   const s = readString(v)?.toLowerCase();
-  if (s === "bike") return "Bike";
-  if (s === "car") return "Car";
+  if (s === "bike") return "bike";
+  if (s === "car") return "car";
   return undefined;
 }
 
@@ -63,37 +67,36 @@ const BIKE_CATEGORIES = new Set(
   ].map((x) => x.toLowerCase())
 );
 
-function inferTypeFromCategory(category?: string): "Bike" | "Car" | undefined {
+function inferTypeFromCategory(category?: string): CompareVehicleType | undefined {
   const raw = (category ?? "").trim();
   if (!raw) return undefined;
 
   const lc = raw.toLowerCase();
 
-  if (CAR_CATEGORIES.has(lc)) return "Car";
-  if (BIKE_CATEGORIES.has(lc)) return "Bike";
+  if (CAR_CATEGORIES.has(lc)) return "car";
+  if (BIKE_CATEGORIES.has(lc)) return "bike";
 
-  if (lc.includes("suv") || lc.includes("hatch") || lc.includes("sedan"))
-    return "Car";
-  if (lc.includes("bike") || lc.includes("scooter") || lc.includes("cruiser"))
-    return "Bike";
+  if (lc.includes("suv") || lc.includes("hatch") || lc.includes("sedan")) return "car";
+  if (lc.includes("bike") || lc.includes("scooter") || lc.includes("cruiser")) return "bike";
 
   return undefined;
 }
 
-export function getCompareVehicleType(
-  row: VehicleListItem
-): "Bike" | "Car" | undefined {
+export function getCompareVehicleType(row: VehicleListItem): CompareVehicleType | undefined {
   const o = row as unknown as Obj;
 
+  // current contract (list item now returns vehicleType: "bike"|"car")
   const vt = normType(o["vehicleType"]);
   if (vt) return vt;
 
+  // legacy fallback keys
   const kind = normType(o["kind"]);
   if (kind) return kind;
 
   const type = normType(o["type"]);
   if (type) return type;
 
+  // final fallback: infer from category
   const cat = readString(o["category"]);
   return inferTypeFromCategory(cat);
 }
@@ -103,20 +106,21 @@ export function loadCompare(): CompareState {
     const raw = localStorage.getItem(KEY);
     if (!raw) return { items: [] };
 
-    const parsed = JSON.parse(raw) as CompareState;
-    if (!parsed || !Array.isArray(parsed.items)) return { items: [] };
+    const parsed = JSON.parse(raw) as unknown;
+    if (!parsed || typeof parsed !== "object") return { items: [] };
 
-    const inferredType = parsed.items[0]
-      ? getCompareVehicleType(parsed.items[0])
-      : undefined;
+    const o = parsed as Obj;
+    const items = Array.isArray(o.items) ? (o.items as VehicleListItem[]) : [];
 
-    const storedType = normType((parsed as unknown as Obj)["vehicleType"]);
+    const inferredType = items[0] ? getCompareVehicleType(items[0]) : undefined;
+    const storedType = normType(o["vehicleType"]);
+
     const vehicleType =
       inferredType && storedType && inferredType !== storedType
         ? inferredType
         : storedType ?? inferredType;
 
-    return { vehicleType, items: parsed.items };
+    return { vehicleType, items };
   } catch {
     return { items: [] };
   }
@@ -127,9 +131,7 @@ export function saveCompare(state: CompareState) {
   window.dispatchEvent(new CustomEvent(EVENT_NAME, { detail: state }));
 }
 
-export function onCompareChanged(
-  cb: (state: CompareState) => void
-): () => void {
+export function onCompareChanged(cb: (state: CompareState) => void): () => void {
   const handler = (e: Event) => {
     const ce = e as CustomEvent<CompareState>;
     cb(ce.detail ?? loadCompare());
@@ -176,9 +178,10 @@ export function toggleCompareWithResult(
   }
 
   if (incomingType !== lockedType) {
+    const label = lockedType === "bike" ? "Bikes" : "Cars";
     return {
       ok: false,
-      reason: `You can only compare ${lockedType}s together.`,
+      reason: `You can only compare ${label} together.`,
       state,
     };
   }

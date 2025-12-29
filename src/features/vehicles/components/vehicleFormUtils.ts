@@ -7,13 +7,13 @@ import {
   POPULAR_BRANDS,
 } from "./vehicleFormOptions";
 
-export type VehicleType = "Bike" | "Car" | "";
+export type VehicleType = "bike" | "car" | "";
 
 // -------------------------------
 // Internal Sets (fast lookups)
 // -------------------------------
-const BIKE_CATEGORY_SET = new Set<string>(BIKE_CATEGORIES);
-const CAR_CATEGORY_SET = new Set<string>(CAR_CATEGORIES);
+const BIKE_CATEGORY_SET = new Set<string>(BIKE_CATEGORIES.map((x) => x.trim().toLowerCase()));
+const CAR_CATEGORY_SET = new Set<string>(CAR_CATEGORIES.map((x) => x.trim().toLowerCase()));
 const POPULAR_BRAND_SET = new Set<string>(POPULAR_BRANDS);
 
 // -------------------------------
@@ -41,63 +41,60 @@ export const NUMBER_FIELDS = new Set<keyof Vehicle>([
   "tankSize",
 ]);
 
-export function inferVehicleTypeFromCategory(
-  initial: Vehicle | null | undefined
-): VehicleType {
+function normalizeVehicleTypeRaw(v?: string | null): VehicleType {
+  const s = (v ?? "").trim().toLowerCase();
+  if (s === "bike") return "bike";
+  if (s === "car") return "car";
+  // legacy titlecase
+  if (s === "Bike".toLowerCase()) return "bike";
+  if (s === "Car".toLowerCase()) return "car";
+  return "";
+}
+
+export function inferVehicleTypeFromCategory(initial: Vehicle | null | undefined): VehicleType {
   if (!initial) return "";
 
-  if (initial.vehicleType === "Bike" || initial.vehicleType === "Car") {
-    return initial.vehicleType;
-  }
+  const direct = normalizeVehicleTypeRaw(initial.vehicleType as unknown as string | null);
+  if (direct) return direct;
 
-  if (
-    initial.doors ||
-    initial.bootSpace ||
-    initial.personCapacity ||
-    initial.rows
-  ) {
-    return "Car";
+  // heuristic fallbacks for legacy flat model
+  if (initial.doors || initial.bootSpace || initial.personCapacity || initial.rows) {
+    return "car";
   }
 
   if (initial.tankSize && !initial.doors) {
-    return "Bike";
+    return "bike";
   }
 
-  const cat = initial.category ?? "";
+  const cat = (initial.category ?? "").trim();
   if (!cat) return "";
 
-  if (BIKE_CATEGORY_SET.has(cat)) return "Bike";
-  if (CAR_CATEGORY_SET.has(cat)) return "Car";
+  const lc = cat.toLowerCase();
+  if (BIKE_CATEGORY_SET.has(lc)) return "bike";
+  if (CAR_CATEGORY_SET.has(lc)) return "car";
 
   return "";
 }
 
-export function normalizeVehicleType(
-  value?: string | null
-): VehicleType {
-  if (value === "Bike" || value === "Car") return value;
-  return "";
+export function normalizeVehicleType(value?: string | null): VehicleType {
+  return normalizeVehicleTypeRaw(value);
 }
 
 // -------------------------------
 // Category options
 // -------------------------------
-export function getCategoryOptions(
-  vehicleType: VehicleType
-): readonly string[] {
-  if (vehicleType === "Bike") return BIKE_CATEGORIES;
-  if (vehicleType === "Car") return CAR_CATEGORIES;
+export function getCategoryOptions(vehicleType: VehicleType): readonly string[] {
+  if (vehicleType === "bike") return BIKE_CATEGORIES;
+  if (vehicleType === "car") return CAR_CATEGORIES;
   return [];
 }
 
 // -------------------------------
 // Transmission options
 // -------------------------------
-export function getTransmissionOptions(
-  vehicleType: VehicleType
-): readonly string[] {
-  if (vehicleType === "Car") return CAR_TRANSMISSIONS;
-  if (vehicleType === "Bike") return BIKE_TRANSMISSIONS;
+export function getTransmissionOptions(vehicleType: VehicleType): readonly string[] {
+  if (vehicleType === "car") return CAR_TRANSMISSIONS;
+  if (vehicleType === "bike") return BIKE_TRANSMISSIONS;
   return [];
 }
 
@@ -114,12 +111,6 @@ export function initBrandState(initialBrand?: string | null) {
   };
 }
 
-export function getFinalBrand(
-  selectedBrand: string,
-  customBrand: string
-) {
-  return (selectedBrand === "Other"
-    ? customBrand.trim()
-    : selectedBrand
-  ).trim();
+export function getFinalBrand(selectedBrand: string, customBrand: string) {
+  return (selectedBrand === "Other" ? customBrand.trim() : selectedBrand).trim();
 }

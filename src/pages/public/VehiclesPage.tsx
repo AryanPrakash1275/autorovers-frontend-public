@@ -1,7 +1,9 @@
+// src/pages/public/VehiclesPage.tsx
+
 import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 
-import type { VehicleListItem } from "../../features/vehicles/types";
+import type { FuelType, PublicVehiclesQuery, VehicleListItem } from "../../features/vehicles/types";
 import { getPublicVehicles } from "../../features/vehicles/api";
 import {
   loadCompare,
@@ -27,7 +29,6 @@ const CAR_CATEGORIES = new Set(
   ["Hatchback", "Sedan", "SUV", "MUV", "Coupe", "EV Car"].map((x) => x.toLowerCase())
 );
 
-type CategoryFilter = "all" | "bike" | "car";
 type SortBy = "priceAsc" | "priceDesc" | "yearAsc" | "yearDesc";
 type BundleKey = "none" | "budget" | "newest" | "ev" | "suv" | "commuter";
 type FeaturedTab = "trending" | "popular" | "electric" | "upcoming";
@@ -36,8 +37,7 @@ type MaybeError = { message?: string };
 
 const HERO_IMG =
   "https://images.pexels.com/photos/100654/pexels-photo-100654.jpeg?auto=compress&cs=tinysrgb&w=1600";
-const FALLBACK_IMG =
-  "https://dummyimage.com/600x400/cccccc/000000&text=No+Image";
+const FALLBACK_IMG = "https://dummyimage.com/600x400/cccccc/000000&text=No+Image";
 
 function safeStr(v: unknown) {
   return typeof v === "string" ? v : "";
@@ -53,20 +53,6 @@ function clamp(n: number, a: number, b: number) {
 
 function formatINR(n: number) {
   return `₹ ${Math.round(n).toLocaleString("en-IN")}`;
-}
-
-function computePercentile(values: number[], p: number) {
-  const v = values
-    .filter((x) => Number.isFinite(x) && x > 0)
-    .sort((a, b) => a - b);
-  if (v.length === 0) return 0;
-  const idx = clamp(Math.floor((v.length - 1) * p), 0, v.length - 1);
-  return v[idx];
-}
-
-function roundToNearest(n: number, step: number) {
-  if (!Number.isFinite(n) || n <= 0) return 0;
-  return Math.round(n / step) * step;
 }
 
 function norm(v: unknown) {
@@ -89,14 +75,13 @@ function inferSelectedTypeFromCategory(catRaw: unknown): VehicleType | undefined
 }
 
 function getSelectedTypeForRow(v: VehicleListItem): VehicleType | undefined {
-  return (
-    toSelectedTypeFromVehicleType(v.vehicleType) ?? inferSelectedTypeFromCategory(v.category)
-  );
+  return toSelectedTypeFromVehicleType(v.vehicleType) ?? inferSelectedTypeFromCategory(v.category);
 }
 
 function isEvVehicle(v: VehicleListItem) {
   const c = norm(v.category);
-  return c.startsWith("ev") || c.includes(" ev") || c.includes("electric");
+  const ft = norm(v.fuelType);
+  return ft === "ev" || c.startsWith("ev") || c.includes(" ev") || c.includes("electric");
 }
 
 function isNewVehicle(v: VehicleListItem, maxYear: number) {
@@ -117,10 +102,49 @@ function getBadges(v: VehicleListItem, maxYear: number) {
   return badges.slice(0, 2);
 }
 
+function readInt(sp: URLSearchParams, key: string, fallback: number): number {
+  const raw = sp.get(key);
+  if (!raw) return fallback;
+  const n = Number(raw);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.trunc(n);
+}
+
+function readStr(sp: URLSearchParams, key: string): string {
+  return (sp.get(key) ?? "").trim();
+}
+
+function setParam(next: URLSearchParams, key: string, value: unknown) {
+  if (value === null || value === undefined) {
+    next.delete(key);
+    return;
+  }
+  if (typeof value === "string") {
+    const t = value.trim();
+    if (!t) next.delete(key);
+    else next.set(key, t);
+    return;
+  }
+  if (typeof value === "number") {
+    if (!Number.isFinite(value)) next.delete(key);
+    else next.set(key, String(value));
+    return;
+  }
+  next.set(key, String(value));
+}
+
+function normalizeFuelType(raw: string): FuelType | "" {
+  const t = raw.trim();
+  if (!t) return "";
+  return t;
+}
+
+const DEFAULT_PAGE_SIZE = 24;
+
 export function VehiclesPage() {
   const nav = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
 
-  const [searchParams] = useSearchParams();
   const urlTypeRaw = searchParams.get("type");
   const urlType = isVehicleType(urlTypeRaw) ? urlTypeRaw : undefined;
 
@@ -146,24 +170,30 @@ export function VehiclesPage() {
     nav("/", { replace: true });
   }, [urlType, nav]);
 
-  const [vehicles, setVehicles] = useState<VehicleListItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  const [search, setSearch] = useState("");
-  const [category, setCategory] = useState<CategoryFilter>("all");
-  const [sortBy, setSortBy] = useState<SortBy>("priceAsc");
-  const [bundle, setBundle] = useState<BundleKey>("none");
+  const urlQ = readStr(searchParams, "q");
+  const urlBrand = readStr(searchParams, "brand");
+  const urlCategory = readStr(searchParams, "category");
+  const urlFuel = normalizeFuelType(readStr(searchParams, "fuelType"));
+  const urlMinPrice = readInt(searchParams, "minPrice", 0);
+  const urlMaxPrice = readInt(searchParams, "maxPrice", 0);
+  const urlSort = (readStr(searchParams, "sort") as SortBy) || "priceAsc";
+  const urlPage = Math.max(1, readInt(searchParams, "page", 1));
+  const urlPageSize = clamp(readInt(searchParams, "pageSize", DEFAULT_PAGE_SIZE), 6, 96);
 
   const [featuredTab, setFeaturedTab] = useState<FeaturedTab>("trending");
   const [browseTab, setBrowseTab] = useState<BrowseTab>("brand");
 
   const [compare, setCompare] = useState(loadCompare());
 
-  useEffect(() => {
-    if (!selectedType) return;
-    setCategory(selectedType === "bike" ? "bike" : "car");
-  }, [selectedType]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const [paged, setPaged] = useState<{
+    items: VehicleListItem[];
+    page: number;
+    pageSize: number;
+    totalCount: number;
+  }>({ items: [], page: 1, pageSize: urlPageSize, totalCount: 0 });
 
   function switchType(next: VehicleType) {
     if (selectedType === next) return;
@@ -176,13 +206,211 @@ export function VehiclesPage() {
       setCompare(cleared);
     }
 
+    setSearchParams((prev) => {
+      const sp = new URLSearchParams(prev);
+      sp.set("type", next);
+      sp.set("page", "1");
+      return sp;
+    });
+
     nav(`/vehicles?type=${next}`, { replace: true });
   }
 
-  const typedVehicles = useMemo(() => {
-    if (!selectedType) return [];
-    return vehicles.filter((v) => getSelectedTypeForRow(v) === selectedType);
+  useEffect(() => {
+    const off = onCompareChanged(setCompare);
+
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === "autorovers_compare_v1") setCompare(loadCompare());
+    };
+
+    window.addEventListener("storage", onStorage);
+    return () => {
+      off();
+      window.removeEventListener("storage", onStorage);
+    };
+  }, []);
+
+  useEffect(() => {
+    let alive = true;
+
+    (async () => {
+      try {
+        if (!selectedType) return;
+
+        setLoading(true);
+        setError(null);
+
+        const query: PublicVehiclesQuery = {
+          type: selectedType,
+          q: urlQ || undefined,
+          brand: urlBrand || undefined,
+          category: urlCategory || undefined,
+          fuelType: urlFuel || undefined,
+          minPrice: urlMinPrice > 0 ? urlMinPrice : undefined,
+          maxPrice: urlMaxPrice > 0 ? urlMaxPrice : undefined,
+          sort: urlSort || "priceAsc",
+          page: urlPage,
+          pageSize: urlPageSize,
+        };
+
+        const res = await getPublicVehicles(query);
+        if (!alive) return;
+
+        const safePage = Math.max(1, res.page || 1);
+        const safeSize = clamp(res.pageSize || urlPageSize, 6, 96);
+        const safeTotal = Math.max(0, res.totalCount || 0);
+
+        // hard guard: never show mixed types even if backend returns them
+        const filtered = (res.items ?? []).filter((v) => getSelectedTypeForRow(v) === selectedType);
+
+        setPaged({
+          items: filtered,
+          page: safePage,
+          pageSize: safeSize,
+          totalCount: safeTotal,
+        });
+      } catch (err: unknown) {
+        const maybe = err as MaybeError;
+        if (alive) setError(maybe?.message ?? "Failed to load vehicles");
+      } finally {
+        if (alive) setLoading(false);
+      }
+    })();
+
+    return () => {
+      alive = false;
+    };
+  }, [
+    selectedType,
+    urlQ,
+    urlBrand,
+    urlCategory,
+    urlFuel,
+    urlMinPrice,
+    urlMaxPrice,
+    urlSort,
+    urlPage,
+    urlPageSize,
+  ]);
+
+  const vehicles = paged.items;
+
+  const bundleMeta = useMemo(() => {
+    const years = vehicles.map((v) => safeNum(v.year)).filter((x) => x > 0);
+    const maxYear = years.length ? Math.max(...years) : 0;
+    const newestYearFloor = maxYear > 0 ? maxYear - 1 : 0;
+    const budgetUnder = selectedType === "car" ? 1200000 : 200000;
+    return { budgetUnder, maxYear, newestYearFloor };
   }, [vehicles, selectedType]);
+
+  function goGrid() {
+    setTimeout(() => {
+      document.querySelector(".catalog-controls")?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    }, 0);
+  }
+
+  function setUrl(updater: (sp: URLSearchParams) => void) {
+    setSearchParams((prev) => {
+      const sp = new URLSearchParams(prev);
+      updater(sp);
+      return sp;
+    });
+  }
+
+  function setFilter(key: string, value: unknown) {
+    setUrl((sp) => {
+      setParam(sp, key, value);
+      sp.set("page", "1");
+    });
+  }
+
+  function applyPreset(next: BundleKey) {
+    setSearchParams((prev) => {
+      const sp = new URLSearchParams(prev);
+      sp.set("page", "1");
+
+      if (next === "none") return sp;
+
+      if (next === "ev") {
+        setParam(sp, "fuelType", "EV");
+        return sp;
+      }
+
+      if (next === "suv") {
+        setParam(sp, "category", "SUV");
+        return sp;
+      }
+
+      if (next === "commuter") {
+        setParam(sp, "category", "Commuter");
+        return sp;
+      }
+
+      if (next === "newest") {
+        setParam(sp, "sort", "yearDesc");
+        return sp;
+      }
+
+      if (next === "budget") {
+        if (selectedType === "car") {
+          setParam(sp, "maxPrice", 1200000);
+          setParam(sp, "minPrice", 0);
+        } else {
+          setParam(sp, "maxPrice", 200000);
+          setParam(sp, "minPrice", 0);
+        }
+        return sp;
+      }
+
+      return sp;
+    });
+
+    goGrid();
+  }
+
+  function resetFilters() {
+    setSearchParams((prev) => {
+      const sp = new URLSearchParams(prev);
+
+      const t = sp.get("type");
+      sp.forEach((_v, k) => sp.delete(k));
+      if (t) sp.set("type", t);
+
+      sp.set("sort", "priceAsc");
+      sp.set("page", "1");
+      sp.set("pageSize", String(DEFAULT_PAGE_SIZE));
+      return sp;
+    });
+
+    goGrid();
+  }
+
+  const featuredList = useMemo(() => {
+    const base = vehicles.filter((v) => safeNum(v.price) > 0 && safeNum(v.year) > 0);
+
+    const newest = [...base].sort((a, b) => safeNum(b.year) - safeNum(a.year));
+    const cheapestRecent = [...base]
+      .filter((v) => safeNum(v.year) >= bundleMeta.maxYear - 3)
+      .sort((a, b) => safeNum(a.price) - safeNum(b.price));
+
+    const maxYear = bundleMeta.maxYear;
+
+    switch (featuredTab) {
+      case "trending":
+        return newest.slice(0, 12);
+      case "popular":
+        return cheapestRecent.slice(0, 12);
+      case "electric":
+        return base.filter(isEvVehicle).slice(0, 12);
+      case "upcoming":
+        return base.filter((v) => safeNum(v.year) === maxYear).slice(0, 12);
+      default:
+        return newest.slice(0, 12);
+    }
+  }, [vehicles, featuredTab, bundleMeta.maxYear]);
 
   const featuredRowRef = useRef<HTMLDivElement | null>(null);
   const [canLeft, setCanLeft] = useState(false);
@@ -205,166 +433,6 @@ export function VehiclesPage() {
   }
 
   useEffect(() => {
-    const off = onCompareChanged(setCompare);
-
-    const onStorage = (e: StorageEvent) => {
-      if (e.key === "autorovers_compare_v1") {
-        setCompare(loadCompare());
-      }
-    };
-
-    window.addEventListener("storage", onStorage);
-    return () => {
-      off();
-      window.removeEventListener("storage", onStorage);
-    };
-  }, []);
-
-  useEffect(() => {
-    let alive = true;
-
-    (async () => {
-      try {
-        setLoading(true);
-        setError(null);
-
-        const data = await getPublicVehicles();
-        if (alive) setVehicles(data);
-      } catch (err: unknown) {
-        const maybe = err as MaybeError;
-        if (alive) setError(maybe?.message ?? "Failed to load vehicles");
-      } finally {
-        if (alive) setLoading(false);
-      }
-    })();
-
-    return () => {
-      alive = false;
-    };
-  }, []);
-
-  const bundleMeta = useMemo(() => {
-    const prices = typedVehicles.map((v) => safeNum(v.price)).filter((x) => x > 0);
-    const years = typedVehicles.map((v) => safeNum(v.year)).filter((x) => x > 0);
-
-    const p30 = computePercentile(prices, 0.3);
-    const budgetUnderRaw = p30 > 0 ? p30 : 150000;
-    const budgetUnder = roundToNearest(budgetUnderRaw, 10000) || 150000;
-
-    const maxYear = years.length ? Math.max(...years) : 0;
-    const newestYearFloor = maxYear > 0 ? maxYear - 1 : 0;
-
-    return { budgetUnder, maxYear, newestYearFloor };
-  }, [typedVehicles]);
-
-  function goGrid() {
-    setTimeout(() => {
-      document.querySelector(".catalog-controls")?.scrollIntoView({
-        behavior: "smooth",
-        block: "start",
-      });
-    }, 0);
-  }
-
-  function applyPreset(next: BundleKey) {
-    setBundle(next);
-    goGrid();
-  }
-
-  function resetFilters() {
-    setBundle("none");
-    setSearch("");
-    setSortBy("priceAsc");
-    goGrid();
-  }
-
-  const bundlePredicate = useMemo(() => {
-    switch (bundle) {
-      case "budget":
-        return (v: VehicleListItem) => {
-          const p = safeNum(v.price);
-          return p > 0 && p <= bundleMeta.budgetUnder;
-        };
-      case "newest":
-        return (v: VehicleListItem) => {
-          const y = safeNum(v.year);
-          return y > 0 && y >= bundleMeta.newestYearFloor;
-        };
-      case "ev":
-        return (v: VehicleListItem) => isEvVehicle(v);
-      case "suv":
-        return (v: VehicleListItem) => selectedType === "car" && norm(v.category) === "suv";
-      case "commuter":
-        return (v: VehicleListItem) =>
-          selectedType === "bike" && norm(v.category) === "commuter";
-      default:
-        return () => true;
-    }
-  }, [bundle, bundleMeta.budgetUnder, bundleMeta.newestYearFloor, selectedType]);
-
-  const filteredVehicles = useMemo(() => {
-    let list = typedVehicles.filter(bundlePredicate);
-
-    const s = search.trim().toLowerCase();
-    if (s) {
-      list = list.filter((v) => {
-        const brand = safeStr(v.brand).toLowerCase();
-        const model = safeStr(v.model).toLowerCase();
-        const variant = safeStr(v.variant).toLowerCase();
-        const cat = safeStr(v.category).toLowerCase();
-        return brand.includes(s) || model.includes(s) || variant.includes(s) || cat.includes(s);
-      });
-    }
-
-    const sorted = [...list];
-    sorted.sort((a, b) => {
-      const ap = safeNum(a.price);
-      const bp = safeNum(b.price);
-      const ay = safeNum(a.year);
-      const by = safeNum(b.year);
-
-      switch (sortBy) {
-        case "priceAsc":
-          return ap - bp;
-        case "priceDesc":
-          return bp - ap;
-        case "yearAsc":
-          return ay - by;
-        case "yearDesc":
-          return by - ay;
-        default:
-          return 0;
-      }
-    });
-
-    return sorted;
-  }, [typedVehicles, bundlePredicate, search, sortBy]);
-
-  const featuredList = useMemo(() => {
-    const base = typedVehicles.filter((v) => safeNum(v.price) > 0 && safeNum(v.year) > 0);
-
-    const newest = [...base].sort((a, b) => safeNum(b.year) - safeNum(a.year));
-    const cheapestRecent = [...base]
-      .filter((v) => safeNum(v.year) >= bundleMeta.maxYear - 3)
-      .sort((a, b) => safeNum(a.price) - safeNum(b.price));
-
-    const maxYear = bundleMeta.maxYear;
-
-    switch (featuredTab) {
-      case "trending":
-        return newest.slice(0, 12);
-      case "popular":
-        return cheapestRecent.slice(0, 12);
-      case "electric":
-        return base.filter(isEvVehicle).slice(0, 12);
-      case "upcoming":
-        return base.filter((v) => safeNum(v.year) === maxYear).slice(0, 12);
-      default:
-        return newest.slice(0, 12);
-    }
-  }, [typedVehicles, featuredTab, bundleMeta.maxYear]);
-
-  useEffect(() => {
     setTimeout(() => updateArrows(), 0);
   }, [featuredTab, featuredList.length]);
 
@@ -375,7 +443,7 @@ export function VehiclesPage() {
   }, []);
 
   const topBrands = useMemo(() => {
-    const brands = typedVehicles.map((v) => safeStr(v.brand).trim()).filter(Boolean);
+    const brands = vehicles.map((v) => safeStr(v.brand).trim()).filter(Boolean);
     const map = new Map<string, number>();
     for (const b of brands) map.set(b, (map.get(b) ?? 0) + 1);
 
@@ -383,7 +451,25 @@ export function VehiclesPage() {
       .sort((a, b) => b[1] - a[1])
       .slice(0, 12)
       .map(([b]) => b);
-  }, [typedVehicles]);
+  }, [vehicles]);
+
+  const categoryOptions = useMemo(() => {
+    const cats = vehicles.map((v) => safeStr(v.category).trim()).filter(Boolean);
+    return Array.from(new Set(cats))
+      .sort((a, b) => a.localeCompare(b))
+      .slice(0, 30);
+  }, [vehicles]);
+
+  const fuelOptions = useMemo(() => {
+    const fuels = vehicles.map((v) => safeStr(v.fuelType).trim()).filter(Boolean);
+    const uniq = Array.from(new Set(fuels));
+    const canon = ["Petrol", "Diesel", "EV", "Hybrid"];
+    const ordered = [
+      ...canon.filter((x) => uniq.includes(x)),
+      ...uniq.filter((x) => !canon.includes(x)),
+    ];
+    return ordered.slice(0, 10);
+  }, [vehicles]);
 
   const compareCount = compare.items.length;
 
@@ -428,10 +514,22 @@ export function VehiclesPage() {
     nav("/compare");
   }
 
-  if (loading) return <div className="public-page">Loading vehicles…</div>;
-  if (error) return <div className="public-page error">{error}</div>;
+  function setPage(nextPage: number) {
+    setUrl((sp) => {
+      sp.set("page", String(Math.max(1, nextPage)));
+    });
+    goGrid();
+  }
+
+  const totalPages = useMemo(() => {
+    if (paged.totalCount <= 0) return 1;
+    return Math.max(1, Math.ceil(paged.totalCount / Math.max(1, paged.pageSize)));
+  }, [paged.totalCount, paged.pageSize]);
 
   const typeLabel = selectedType === "bike" ? "Bikes" : "Cars";
+
+  if (loading) return <div className="public-page">Loading vehicles…</div>;
+  if (error) return <div className="public-page error">{error}</div>;
 
   return (
     <div className={`public-page ${compareCount ? "has-comparebar" : ""}`}>
@@ -479,18 +577,21 @@ export function VehiclesPage() {
               <button
                 className={`bundle-tab ${featuredTab === "trending" ? "is-active" : ""}`}
                 onClick={() => setFeaturedTab("trending")}
+                type="button"
               >
                 Trending
               </button>
               <button
                 className={`bundle-tab ${featuredTab === "popular" ? "is-active" : ""}`}
                 onClick={() => setFeaturedTab("popular")}
+                type="button"
               >
                 Popular
               </button>
               <button
                 className={`bundle-tab ${featuredTab === "electric" ? "is-active" : ""}`}
                 onClick={() => setFeaturedTab("electric")}
+                type="button"
               >
                 Electric
               </button>
@@ -498,6 +599,7 @@ export function VehiclesPage() {
                 className={`bundle-tab ${featuredTab === "upcoming" ? "is-active" : ""}`}
                 onClick={() => setFeaturedTab("upcoming")}
                 disabled={bundleMeta.maxYear === 0}
+                type="button"
               >
                 Upcoming
               </button>
@@ -511,6 +613,7 @@ export function VehiclesPage() {
               else if (featuredTab === "popular") applyPreset("budget");
               else applyPreset("newest");
             }}
+            type="button"
           >
             View all
           </button>
@@ -523,6 +626,7 @@ export function VehiclesPage() {
             disabled={!canLeft}
             aria-label="Scroll left"
             title="Scroll left"
+            type="button"
           >
             ‹
           </button>
@@ -598,6 +702,7 @@ export function VehiclesPage() {
             disabled={!canRight}
             aria-label="Scroll right"
             title="Scroll right"
+            type="button"
           >
             ›
           </button>
@@ -611,18 +716,21 @@ export function VehiclesPage() {
                 <button
                   className={`bundle-tab ${browseTab === "brand" ? "is-active" : ""}`}
                   onClick={() => setBrowseTab("brand")}
+                  type="button"
                 >
                   Brand
                 </button>
                 <button
                   className={`bundle-tab ${browseTab === "budget" ? "is-active" : ""}`}
                   onClick={() => setBrowseTab("budget")}
+                  type="button"
                 >
                   Budget
                 </button>
                 <button
                   className={`bundle-tab ${browseTab === "body" ? "is-active" : ""}`}
                   onClick={() => setBrowseTab("body")}
+                  type="button"
                 >
                   Body style
                 </button>
@@ -637,10 +745,10 @@ export function VehiclesPage() {
                   key={b}
                   className="browse-pill"
                   onClick={() => {
-                    setBundle("none");
-                    setSearch(b);
+                    setFilter("brand", b);
                     goGrid();
                   }}
+                  type="button"
                 >
                   {b}
                 </button>
@@ -650,22 +758,26 @@ export function VehiclesPage() {
 
           {browseTab === "budget" && (
             <div className="browse-grid">
-              <button className="browse-pill" onClick={() => applyPreset("budget")}>
-                Under {formatINR(bundleMeta.budgetUnder)}
+              <button className="browse-pill" onClick={() => applyPreset("budget")} type="button">
+                Budget picks
               </button>
-              <button className="browse-pill" onClick={() => applyPreset("newest")}>
+              <button className="browse-pill" onClick={() => applyPreset("newest")} type="button">
                 Newest launches
               </button>
-              <button className="browse-pill" onClick={() => applyPreset("ev")}>
+              <button className="browse-pill" onClick={() => applyPreset("ev")} type="button">
                 EVs
               </button>
 
               {selectedType === "car" ? (
-                <button className="browse-pill" onClick={() => applyPreset("suv")}>
+                <button className="browse-pill" onClick={() => applyPreset("suv")} type="button">
                   SUVs
                 </button>
               ) : (
-                <button className="browse-pill" onClick={() => applyPreset("commuter")}>
+                <button
+                  className="browse-pill"
+                  onClick={() => applyPreset("commuter")}
+                  type="button"
+                >
                   Commuters
                 </button>
               )}
@@ -676,52 +788,44 @@ export function VehiclesPage() {
             <div className="browse-grid">
               {selectedType === "car" ? (
                 <>
-                  <button className="browse-pill" onClick={() => applyPreset("suv")}>
+                  <button className="browse-pill" onClick={() => applyPreset("suv")} type="button">
                     SUVs
                   </button>
                   <button
                     className="browse-pill"
-                    onClick={() => {
-                      setBundle("none");
-                      setSearch("Sedan");
-                      goGrid();
-                    }}
+                    onClick={() => setFilter("category", "Sedan")}
+                    type="button"
                   >
                     Sedans
                   </button>
                   <button
                     className="browse-pill"
-                    onClick={() => {
-                      setBundle("none");
-                      setSearch("Hatchback");
-                      goGrid();
-                    }}
+                    onClick={() => setFilter("category", "Hatchback")}
+                    type="button"
                   >
                     Hatchbacks
                   </button>
                 </>
               ) : (
                 <>
-                  <button className="browse-pill" onClick={() => applyPreset("commuter")}>
+                  <button
+                    className="browse-pill"
+                    onClick={() => applyPreset("commuter")}
+                    type="button"
+                  >
                     Commuters
                   </button>
                   <button
                     className="browse-pill"
-                    onClick={() => {
-                      setBundle("none");
-                      setSearch("Sport");
-                      goGrid();
-                    }}
+                    onClick={() => setFilter("category", "Sport")}
+                    type="button"
                   >
                     Sport
                   </button>
                   <button
                     className="browse-pill"
-                    onClick={() => {
-                      setBundle("none");
-                      setSearch("Cruiser");
-                      goGrid();
-                    }}
+                    onClick={() => setFilter("category", "Cruiser")}
+                    type="button"
                   >
                     Cruisers
                   </button>
@@ -740,50 +844,117 @@ export function VehiclesPage() {
         <div className="catalog-controls">
           <input
             type="text"
-            placeholder="Search by brand, model, variant..."
+            placeholder="Search brand/model/variant..."
             className="catalog-search"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            value={urlQ}
+            onChange={(e) => setFilter("q", e.target.value)}
           />
 
-          <select className="catalog-select" value={category} disabled>
-            <option value="bike">Bikes</option>
-            <option value="car">Cars</option>
+          <select
+            className="catalog-select"
+            value={urlBrand}
+            onChange={(e) => setFilter("brand", e.target.value)}
+          >
+            <option value="">All brands</option>
+            {topBrands.map((b) => (
+              <option key={`brand-${b}`} value={b}>
+                {b}
+              </option>
+            ))}
           </select>
 
           <select
             className="catalog-select"
-            value={sortBy}
-            onChange={(e) => setSortBy(e.target.value as SortBy)}
+            value={urlCategory}
+            onChange={(e) => setFilter("category", e.target.value)}
+          >
+            <option value="">All categories</option>
+            {categoryOptions.map((c) => (
+              <option key={`cat-${c}`} value={c}>
+                {c}
+              </option>
+            ))}
+          </select>
+
+          <select
+            className="catalog-select"
+            value={urlFuel}
+            onChange={(e) => setFilter("fuelType", e.target.value)}
+          >
+            <option value="">All fuel types</option>
+            {fuelOptions.map((f) => (
+              <option key={`fuel-${f}`} value={f}>
+                {f}
+              </option>
+            ))}
+          </select>
+
+          <select
+            className="catalog-select"
+            value={urlSort}
+            onChange={(e) => setFilter("sort", e.target.value as SortBy)}
           >
             <option value="priceAsc">Price: Low to High</option>
             <option value="priceDesc">Price: High to Low</option>
             <option value="yearAsc">Year: Old to New</option>
             <option value="yearDesc">Year: New to Old</option>
           </select>
+
+          <select
+            className="catalog-select"
+            value={String(urlPageSize)}
+            onChange={(e) => {
+              const nextSize = clamp(Number(e.target.value), 6, 96);
+              setUrl((sp) => {
+                sp.set("pageSize", String(nextSize));
+                sp.set("page", "1");
+              });
+            }}
+          >
+            <option value="12">12 / page</option>
+            <option value="24">24 / page</option>
+            <option value="36">36 / page</option>
+            <option value="48">48 / page</option>
+          </select>
+
+          <button className="public-btn public-btn--ghost" onClick={resetFilters} type="button">
+            Reset
+          </button>
+        </div>
+
+        <div style={{ marginTop: 10, opacity: 0.8 }}>
+          Showing {vehicles.length} of {paged.totalCount} • Page {paged.page} / {totalPages}
         </div>
       </section>
 
       <section className="catalog-section">
         <div className="vehicle-grid">
-          {filteredVehicles.length === 0 && (
+          {vehicles.length === 0 && (
             <div className="empty-state">
               <div className="empty-state-title">No vehicles match your filters.</div>
               <div className="empty-state-subtitle">
-                Try clearing search, or reset bundles back to the full catalog.
+                Try clearing filters or reset back to the full catalog.
               </div>
               <div className="empty-state-actions">
-                <button className="public-btn public-btn--ghost" onClick={() => setSearch("")}>
+                <button
+                  className="public-btn public-btn--ghost"
+                  onClick={() => setFilter("q", "")}
+                  type="button"
+                >
                   Clear search
                 </button>
-                <button className="public-btn public-btn--primary" onClick={resetFilters}>
+                <button
+                  className="public-btn public-btn--primary"
+                  onClick={resetFilters}
+                  type="button"
+                >
                   Reset catalog
                 </button>
               </div>
             </div>
           )}
 
-          {filteredVehicles.map((v) => {
+          {vehicles.map((v) => {
             const slug = safeStr(v.slug);
             const to =
               slug.trim().length > 0 ? `/vehicles/${encodeURIComponent(slug)}` : "/vehicles";
@@ -857,9 +1028,7 @@ export function VehiclesPage() {
 
                 <div className="vehicle-card-cta">
                   <button
-                    className={`public-btn ${
-                      selected ? "public-btn--danger" : "public-btn--primary"
-                    }`}
+                    className={`public-btn ${selected ? "public-btn--danger" : "public-btn--primary"}`}
                     style={{ width: "100%" }}
                     disabled={!canCompare}
                     onClick={(e) => {
@@ -867,6 +1036,7 @@ export function VehiclesPage() {
                       onToggleCompare(e, v);
                     }}
                     title={compareBtnTitle}
+                    type="button"
                   >
                     {compareBtnText}
                   </button>
@@ -877,6 +1047,27 @@ export function VehiclesPage() {
             );
           })}
         </div>
+
+        {paged.totalCount > paged.pageSize && (
+          <div style={{ display: "flex", gap: 10, justifyContent: "center", marginTop: 16 }}>
+            <button
+              className="public-btn public-btn--ghost"
+              disabled={paged.page <= 1}
+              onClick={() => setPage(paged.page - 1)}
+              type="button"
+            >
+              Prev
+            </button>
+            <button
+              className="public-btn public-btn--ghost"
+              disabled={paged.page >= totalPages}
+              onClick={() => setPage(paged.page + 1)}
+              type="button"
+            >
+              Next
+            </button>
+          </div>
+        )}
       </section>
 
       {compareCount > 0 && (
@@ -890,7 +1081,7 @@ export function VehiclesPage() {
           </div>
 
           <div className="compare-bar-actions">
-            <button className="public-btn public-btn--ghost" onClick={onClearCompare}>
+            <button className="public-btn public-btn--ghost" onClick={onClearCompare} type="button">
               Clear
             </button>
             <button
@@ -898,6 +1089,7 @@ export function VehiclesPage() {
               onClick={goCompare}
               disabled={compareCount < 2}
               title={compareCount < 2 ? "Add at least 2 vehicles to compare" : "Open compare"}
+              type="button"
             >
               {compareCount < 2 ? "Add one more" : "Compare now"}
             </button>
