@@ -1,5 +1,3 @@
-// src/pages/public/VehicleDetailsPage.tsx
-
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams, useNavigate } from "react-router-dom";
 
@@ -7,30 +5,16 @@ import type {
   VehicleWithDetailsDto,
   VehicleDetailsDto,
   VehicleVariantDto,
-  VariantAddonDto,
   VehicleListItem,
 } from "../../features/vehicles/types";
 import { getPublicVehicleBySlug } from "../../features/vehicles/api";
-import {
-  loadCompare,
-  toggleCompareWithResult,
-  onCompareChanged,
-} from "../../features/vehicles/compareState";
+import { loadCompare, toggleCompareWithResult, onCompareChanged } from "../../features/vehicles/compareState";
 import { Footer } from "../../shared/ui/Footer";
-import {
-  getSelectedVehicleType,
-  onVehicleTypeChanged,
-  type VehicleType,
-} from "../../features/vehicles/vehicleTypeStorage";
-
+import { getSelectedVehicleType, onVehicleTypeChanged, type VehicleType } from "../../features/vehicles/vehicleTypeStorage";
 
 type MaybeError = { message?: string };
 
 const FALLBACK_IMG = "https://dummyimage.com/600x400/cccccc/000000&text=No+Image";
-
-/* =======================
-   Helpers
-======================= */
 
 function hasValue(v: unknown): boolean {
   if (v === null || v === undefined) return false;
@@ -73,12 +57,6 @@ function parseColors(json?: string | null): string[] {
   }
 }
 
-function sum(nums: number[]): number {
-  let s = 0;
-  for (const n of nums) s += n;
-  return s;
-}
-
 function upsertMeta(name: string, content: string) {
   const head = document.head;
   if (!head) return;
@@ -107,11 +85,7 @@ function inferSelectedTypeFromCategory(catRaw: unknown): VehicleType | undefined
   const c = norm(catRaw);
   if (!c) return undefined;
 
-  const bike = new Set(
-    ["Sport", "Commuter", "Cruiser", "Tourer", "Off-road", "Scooter", "EV Bike"].map((x) =>
-      x.toLowerCase()
-    )
-  );
+  const bike = new Set(["Sport", "Commuter", "Cruiser", "Tourer", "Off-road", "Scooter", "EV Bike"].map((x) => x.toLowerCase()));
   const car = new Set(["Hatchback", "Sedan", "SUV", "MUV", "Coupe", "EV Car"].map((x) => x.toLowerCase()));
 
   if (bike.has(c)) return "bike";
@@ -136,17 +110,12 @@ function asComparableListItem(v: VehicleWithDetailsDto): VehicleListItem {
   };
 }
 
-/* =======================
-   Component
-======================= */
-
 export function VehicleDetailsPage() {
   const nav = useNavigate();
-  const { slug } = useParams<{ slug: string }>();
+  const params = useParams();
+  const slug = params.slug ?? "";
 
-  const [selectedType, setSelectedType] = useState<VehicleType | undefined>(() =>
-    getSelectedVehicleType()
-  );
+  const [selectedType, setSelectedType] = useState<VehicleType | undefined>(() => getSelectedVehicleType());
 
   useEffect(() => {
     return onVehicleTypeChanged(setSelectedType);
@@ -161,9 +130,6 @@ export function VehicleDetailsPage() {
   const [vehicle, setVehicle] = useState<VehicleWithDetailsDto | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
-  const [selectedVariantId, setSelectedVariantId] = useState<number | null>(null);
-  const [selectedAddonIds, setSelectedAddonIds] = useState<number[]>([]);
 
   const [compare, setCompare] = useState(loadCompare());
 
@@ -185,45 +151,19 @@ export function VehicleDetailsPage() {
 
   const colors = useMemo(() => parseColors(details.colorsAvailableJson), [details.colorsAvailableJson]);
 
-  const variants: VehicleVariantDto[] = useMemo(() => {
+  const variants = useMemo<VehicleVariantDto[]>(() => {
     const list = vehicle?.variants ?? [];
-    return [...list].sort((a, b) => {
-      if (a.isDefault !== b.isDefault) return a.isDefault ? -1 : 1;
-      if (a.price !== b.price) return a.price - b.price;
-      return a.name.localeCompare(b.name);
-    });
+    return Array.isArray(list) ? list : [];
   }, [vehicle?.variants]);
 
-  const selectedVariant = useMemo(() => {
-    if (!variants.length) return null;
-    if (selectedVariantId == null) return variants.find((x) => x.isDefault) ?? variants[0];
-    return variants.find((x) => x.id === selectedVariantId) ?? null;
-  }, [variants, selectedVariantId]);
+  const startsFromNumber = useMemo(() => {
+    const prices = (variants ?? []).map((v) => (typeof v.price === "number" && Number.isFinite(v.price) ? v.price : 0)).filter((x) => x > 0);
+    const minVariant = prices.length ? Math.min(...prices) : 0;
+    const base = typeof vehicle?.price === "number" && Number.isFinite(vehicle.price) ? vehicle.price : 0;
+    return minVariant > 0 ? minVariant : base > 0 ? base : 0;
+  }, [variants, vehicle?.price]);
 
-  useEffect(() => {
-    if (!variants.length) return;
-    if (selectedVariantId != null) return;
-
-    const def = variants.find((x) => x.isDefault) ?? variants[0];
-    setSelectedVariantId(def.id);
-  }, [variants, selectedVariantId]);
-
-  useEffect(() => {
-    setSelectedAddonIds([]);
-  }, [selectedVariant?.id]);
-
-  const selectedAddons: VariantAddonDto[] = useMemo(() => {
-    const addons = selectedVariant?.addons ?? [];
-    if (!addons.length) return [];
-    const set = new Set(selectedAddonIds);
-    return addons.filter((a) => set.has(a.id));
-  }, [selectedVariant?.addons, selectedAddonIds]);
-
-  const addonsTotal = useMemo(() => sum(selectedAddons.map((a) => a.price ?? 0)), [selectedAddons]);
-
-  const baseVariantPrice = selectedVariant?.price ?? 0;
-  const finalPriceNumber =
-    (baseVariantPrice > 0 ? baseVariantPrice : vehicle?.price ?? 0) + (addonsTotal > 0 ? addonsTotal : 0);
+  const displayStartsFrom = useMemo(() => formatINR(startsFromNumber), [startsFromNumber]);
 
   const d = details;
   const eng = d.engine ?? {};
@@ -267,15 +207,8 @@ export function VehicleDetailsPage() {
 
   const title = useMemo(() => {
     if (!vehicle) return "Vehicle";
-    const base = [vehicle.brand, vehicle.model].filter(Boolean).join(" ");
-    const vname = selectedVariant?.name ?? vehicle.variant;
-    return [base, vname].filter(Boolean).join(" ");
-  }, [vehicle, selectedVariant]);
-
-  const displayPrice = useMemo(() => {
-    if (!finalPriceNumber || finalPriceNumber <= 0) return "—";
-    return formatINR(finalPriceNumber);
-  }, [finalPriceNumber]);
+    return [vehicle.brand, vehicle.model].filter(Boolean).join(" ");
+  }, [vehicle]);
 
   useEffect(() => {
     if (!slug) {
@@ -295,14 +228,6 @@ export function VehicleDetailsPage() {
         if (!alive) return;
 
         setVehicle(data);
-
-        const list = data.variants ?? [];
-        if (list.length > 0) {
-          const def = list.find((x) => x.isDefault) ?? list[0];
-          setSelectedVariantId(def.id);
-        } else {
-          setSelectedVariantId(null);
-        }
       } catch (err: unknown) {
         const maybe = err as MaybeError;
         if (alive) setError(maybe?.message ?? "Failed to load vehicle");
@@ -321,7 +246,6 @@ export function VehicleDetailsPage() {
     return toSelectedTypeFromVehicleType(vehicle.vehicleType) ?? inferSelectedTypeFromCategory(vehicle.category);
   }, [vehicle]);
 
-  // Enforce invariant: details must match selectedType
   useEffect(() => {
     if (!vehicle) return;
     if (!selectedType) return;
@@ -331,19 +255,17 @@ export function VehicleDetailsPage() {
     }
   }, [vehicle, selectedType, fetchedType, nav]);
 
-  // SEO for details page
   useEffect(() => {
     if (!vehicle || !selectedType) return;
 
     const typeLabel = selectedType === "car" ? "Cars" : "Bikes";
     const yr = vehicle.year ? `${vehicle.year}` : "";
-    const baseName = [vehicle.brand, vehicle.model].filter(Boolean).join(" ").trim();
-    const name = [baseName, yr].filter(Boolean).join(" ");
+    const name = [vehicle.brand, vehicle.model, yr].filter(Boolean).join(" ");
 
-    document.title = `${name} — Specs, variants & price | Autorovers`;
+    document.title = `${name} — Specs & price | Autorovers`;
     upsertMeta(
       "description",
-      `${name}: view clean specs, variants, and pricing. Compare with other ${typeLabel.toLowerCase()} on Autorovers.`
+      `${name}: view clean specs and starting price. Browse variants and compare with other ${typeLabel.toLowerCase()} on Autorovers.`
     );
   }, [vehicle, selectedType]);
 
@@ -355,8 +277,7 @@ export function VehicleDetailsPage() {
     if (!s) return { ok: false as const, reason: "Missing slug" };
 
     const rowType = fetchedType;
-    if (rowType && rowType !== selectedType)
-      return { ok: false as const, reason: `Wrong type (${rowType})` };
+    if (rowType && rowType !== selectedType) return { ok: false as const, reason: `Wrong type (${rowType})` };
 
     return { ok: true as const };
   }, [vehicle, selectedType, fetchedType]);
@@ -382,6 +303,7 @@ export function VehicleDetailsPage() {
   if (!vehicle) return <div className="public-page">Vehicle not found.</div>;
 
   const v = vehicle;
+  const encodedSlug = encodeURIComponent(slug);
   const hasVariants = variants.length > 0;
 
   return (
@@ -428,74 +350,21 @@ export function VehicleDetailsPage() {
             {hasValue(d.specification) && <span className="feature-badge">{text(d.specification)}</span>}
             {hasValue(engineType) && <span className="feature-badge">{text(engineType)}</span>}
             {colors.length > 0 && <span className="feature-badge">{colors.length} colors</span>}
+            {hasVariants && <span className="feature-badge">{variants.length} variants</span>}
           </div>
-
-          {hasVariants && (
-            <div className="vehicle-variant-picker">
-              <div className="label">Variant</div>
-
-              <div className="variant-pills" role="radiogroup" aria-label="Select variant">
-                {variants.map((x) => {
-                  const active = selectedVariant?.id === x.id;
-                  return (
-                    <button
-                      key={x.id}
-                      type="button"
-                      className={`variant-pill ${active ? "is-active" : ""}`}
-                      role="radio"
-                      aria-checked={active}
-                      onClick={() => setSelectedVariantId(x.id)}
-                    >
-                      <span className="variant-pill-name">{x.name}</span>
-                      <span className="variant-pill-price">{formatINR(x.price)}</span>
-                    </button>
-                  );
-                })}
-              </div>
-
-              <div className="variant-hint">{selectedVariant?.isDefault ? "Default variant selected" : ""}</div>
-            </div>
-          )}
 
           <div className="vehicle-price">
-            {displayPrice} <span className="price-note">Ex-showroom (approx.)</span>
+            {displayStartsFrom} <span className="price-note">Starts from (ex-showroom, approx.)</span>
           </div>
 
-          {selectedVariant && selectedVariant.addons?.length > 0 && (
-            <div className="vehicle-addons">
-              <div className="addons-title">Add-ons</div>
-
-              <ul className="addons-list">
-                {selectedVariant.addons.map((a) => {
-                  const checked = selectedAddonIds.includes(a.id);
-                  return (
-                    <li key={a.id} className="addons-item">
-                      <label className="addons-check">
-                        <input
-                          type="checkbox"
-                          checked={checked}
-                          onChange={(e) => {
-                            const next = e.target.checked;
-                            setSelectedAddonIds((prev) => {
-                              if (next) return [...prev, a.id];
-                              return prev.filter((id) => id !== a.id);
-                            });
-                          }}
-                        />
-                        <span className="addons-name">{a.name}</span>
-                      </label>
-
-                      <span className="addons-price">{formatINR(a.price)}</span>
-                    </li>
-                  );
-                })}
-              </ul>
-
-              <div className="addons-total">
-                Add-ons total: <strong>{formatINR(addonsTotal)}</strong>
-              </div>
-            </div>
-          )}
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 12 }}>
+            <Link to={`/vehicles/${encodedSlug}/variants`} className="public-btn public-btn--primary" style={{ textDecoration: "none" }}>
+              View all variants →
+            </Link>
+            <Link to={`/vehicles/${encodedSlug}/variants`} className="public-btn public-btn--ghost" style={{ textDecoration: "none" }}>
+              Prices & add-ons →
+            </Link>
+          </div>
 
           <div className="vehicle-highlight-row">
             {hasValue(power) && (
@@ -546,11 +415,7 @@ export function VehicleDetailsPage() {
           </section>
         )}
 
-        {(hasValue(engineType) ||
-          hasValue(inductionType) ||
-          hasValue(emission) ||
-          hasValue(eng.fuelType) ||
-          hasValue(d.fuelType)) && (
+        {(hasValue(engineType) || hasValue(inductionType) || hasValue(emission) || hasValue(eng.fuelType) || hasValue(d.fuelType)) && (
           <section className="spec-card">
             <h2>Powertrain</h2>
             <dl>
@@ -664,16 +529,10 @@ export function VehicleDetailsPage() {
             <dl>
               <Spec label="Gears" value={text(bike.numberOfGears)} />
               <Spec label="ABS" value={hasValue(bike.abs) ? (bike.abs ? "Yes" : "No") : "—"} />
-              <Spec
-                label="Traction control"
-                value={hasValue(bike.tractionControl) ? (bike.tractionControl ? "Yes" : "No") : "—"}
-              />
+              <Spec label="Traction control" value={hasValue(bike.tractionControl) ? (bike.tractionControl ? "Yes" : "No") : "—"} />
               <Spec label="Bluetooth" value={hasValue(bike.bluetooth) ? (bike.bluetooth ? "Yes" : "No") : "—"} />
               <Spec label="Navigation" value={hasValue(bike.navigation) ? (bike.navigation ? "Yes" : "No") : "—"} />
-              <Spec
-                label="Smart connectivity"
-                value={hasValue(bike.smartConnectivity) ? (bike.smartConnectivity ? "Yes" : "No") : "—"}
-              />
+              <Spec label="Smart connectivity" value={hasValue(bike.smartConnectivity) ? (bike.smartConnectivity ? "Yes" : "No") : "—"} />
             </dl>
           </section>
         )}
@@ -688,23 +547,11 @@ export function VehicleDetailsPage() {
             <h2>Car safety & tech</h2>
             <dl>
               <Spec label="Airbags" value={text(car.airbags)} />
-              <Spec
-                label="Rear camera"
-                value={hasValue(car.rearViewCamera) ? (car.rearViewCamera ? "Yes" : "No") : "—"}
-              />
-              <Spec
-                label="Parking sensors"
-                value={hasValue(car.parkingSensors) ? (car.parkingSensors ? "Yes" : "No") : "—"}
-              />
-              <Spec
-                label="Cruise control"
-                value={hasValue(car.cruiseControl) ? (car.cruiseControl ? "Yes" : "No") : "—"}
-              />
+              <Spec label="Rear camera" value={hasValue(car.rearViewCamera) ? (car.rearViewCamera ? "Yes" : "No") : "—"} />
+              <Spec label="Parking sensors" value={hasValue(car.parkingSensors) ? (car.parkingSensors ? "Yes" : "No") : "—"} />
+              <Spec label="Cruise control" value={hasValue(car.cruiseControl) ? (car.cruiseControl ? "Yes" : "No") : "—"} />
               <Spec label="Hill assist" value={hasValue(car.hillAssist) ? (car.hillAssist ? "Yes" : "No") : "—"} />
-              <Spec
-                label="Smart connectivity"
-                value={hasValue(car.smartConnectivity) ? (car.smartConnectivity ? "Yes" : "No") : "—"}
-              />
+              <Spec label="Smart connectivity" value={hasValue(car.smartConnectivity) ? (car.smartConnectivity ? "Yes" : "No") : "—"} />
             </dl>
           </section>
         )}

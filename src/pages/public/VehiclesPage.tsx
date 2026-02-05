@@ -741,7 +741,7 @@ export function VehiclesPage() {
           <div className="bundle-row bundle-row--carousel" ref={featuredRowRef} onScroll={updateArrows}>
             {featuredList.map((v) => {
               const slug = safeStr(v.slug);
-              const to = slug.trim().length > 0 ? `/vehicles/${encodeURIComponent(slug)}` : "/vehicles";
+             const to = slug.trim().length > 0 ? `/vehicles/${encodeURIComponent(slug)}/variants` : "/vehicles";
 
               const title = `${safeStr(v.brand)} ${safeStr(v.model)}`.trim() || "Vehicle";
               const year = safeNum(v.year) > 0 ? String(v.year) : "—";
@@ -1013,7 +1013,7 @@ export function VehiclesPage() {
 
           {vehicles.map((v) => {
             const slug = safeStr(v.slug);
-            const to = slug.trim().length > 0 ? `/vehicles/${encodeURIComponent(slug)}` : "/vehicles";
+            const to = slug.trim().length > 0 ? `/vehicles/${encodeURIComponent(slug)}/variants` : "/vehicles";
 
             const title = `${safeStr(v.brand)} ${safeStr(v.model)}`.trim() || "Vehicle";
             const year = safeNum(v.year) > 0 ? String(v.year) : "—";

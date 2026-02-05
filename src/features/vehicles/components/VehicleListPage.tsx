@@ -13,6 +13,7 @@ import {
   getVehicleWithDetails,
   updateVehicleDetails,
   type CreateVehicleRequest,
+  type UpdateVehicleDetailsRequest,
 } from "../api";
 
 import {
@@ -30,9 +31,44 @@ import {
 import { mapFullVehicleToForm } from "./vehicleMapper";
 import { loadCompare, toggleCompare } from "../compareState";
 
-/* =========================
-   Helpers
-   ========================= */
+type VehicleFormModel = Vehicle &
+  Partial<{
+    batteryCapacity: number;
+    chargingTimeFast: number;
+    chargingTimeNormal: number;
+    motorPower: number;
+    motorTorque: number;
+    fastChargingPort: boolean;
+    evRange: number;
+
+    turningRadius: number;
+    frontSuspension: string;
+    rearSuspension: string;
+
+    numberOfGears: number;
+    abs: boolean;
+    tractionControl: boolean;
+    displaySize: number;
+    bluetooth: boolean;
+    navigation: boolean;
+    smartConnectivity: boolean;
+
+    driveType: string;
+    zeroToHundred: number;
+    topSpeed: number;
+    poweredSteering: boolean;
+    steeringType: string;
+    hasSpareWheel: boolean;
+    airbags: number;
+    hillAssist: boolean;
+    rearViewCamera: boolean;
+    parkingSensors: boolean;
+    cruiseControl: boolean;
+    carDisplaySize: number;
+    carBluetooth: boolean;
+    carNavigation: boolean;
+    carSmartConnectivity: boolean;
+  }>;
 
 function toMessage(err: unknown, fallback: string) {
   return err instanceof Error ? err.message : fallback;
@@ -45,6 +81,19 @@ function sOrNull(v?: string) {
 
 function nOrNull(v?: number) {
   return typeof v === "number" && Number.isFinite(v) && v !== 0 ? v : null;
+}
+
+function sOrU(v?: string | null) {
+  const t = (v ?? "").trim();
+  return t.length ? t : undefined;
+}
+
+function nOrU(v?: number | null) {
+  return typeof v === "number" && Number.isFinite(v) && v !== 0 ? v : undefined;
+}
+
+function bOrU(v?: boolean | null) {
+  return typeof v === "boolean" ? v : undefined;
 }
 
 function hasSlug(row: VehicleListItem): boolean {
@@ -126,9 +175,108 @@ function buildCreateReq(data: Vehicle): CreateVehicleRequest {
   };
 }
 
-/* =========================
-   Component
-   ========================= */
+function hasAnyValue(obj: Record<string, unknown>) {
+  for (const v of Object.values(obj)) {
+    if (v !== undefined) return true;
+  }
+  return false;
+}
+
+function buildDetailsReq(data: VehicleFormModel): UpdateVehicleDetailsRequest {
+  const engine = {
+    engineType: sOrU(data.engineType),
+    engineDisplacement: nOrU(data.engineDisplacement),
+    inductionType: sOrU(data.inductionType),
+    emission: sOrU(data.emission),
+    power: nOrU(data.power),
+    powerRpm: nOrU(data.powerRpm),
+    torque: nOrU(data.torque),
+    torqueRpm: nOrU(data.torqueRpm),
+    mileage: nOrU(data.mileage),
+    range: nOrU(data.range),
+    fuelType: sOrU(data.fuelType ?? undefined),
+  };
+
+  const ev = {
+    batteryCapacity: nOrU(data.batteryCapacity),
+    chargingTimeFast: nOrU(data.chargingTimeFast),
+    chargingTimeNormal: nOrU(data.chargingTimeNormal),
+    motorPower: nOrU(data.motorPower),
+    motorTorque: nOrU(data.motorTorque),
+    fastChargingPort: bOrU(data.fastChargingPort),
+    range: nOrU(data.evRange),
+  };
+
+  const dimensions = {
+    length: nOrU(data.length),
+    width: nOrU(data.width),
+    height: nOrU(data.height),
+    wheelBase: nOrU(data.wheelBase),
+    groundClearance: nOrU(data.groundClearance),
+    weight: nOrU(data.weight),
+    turningRadius: nOrU(data.turningRadius),
+  };
+
+  const dynamics = {
+    frontType: sOrU(data.frontType),
+    backType: sOrU(data.backType),
+    frontBrake: sOrU(data.frontBrake),
+    backBrake: sOrU(data.backBrake),
+    frontSuspension: sOrU(data.frontSuspension),
+    rearSuspension: sOrU(data.rearSuspension),
+    tyreSizeFront: sOrU(data.tyreSizeFront),
+    tyreSizeBack: sOrU(data.tyreSizeBack),
+    tyreType: sOrU(data.tyreType),
+    wheelMaterial: sOrU(data.wheelMaterial),
+  };
+
+  const bike = {
+    numberOfGears: nOrU(data.numberOfGears),
+    tankSize: nOrU(data.tankSize),
+    abs: bOrU(data.abs),
+    tractionControl: bOrU(data.tractionControl),
+    displaySize: nOrU(data.displaySize),
+    bluetooth: bOrU(data.bluetooth),
+    navigation: bOrU(data.navigation),
+    smartConnectivity: bOrU(data.smartConnectivity),
+  };
+
+  const car = {
+    driveType: sOrU(data.driveType),
+    zeroToHundred: nOrU(data.zeroToHundred),
+    topSpeed: nOrU(data.topSpeed),
+    personCapacity: nOrU(data.personCapacity),
+    rows: nOrU(data.rows),
+    doors: nOrU(data.doors),
+    bootSpace: nOrU(data.bootSpace),
+    poweredSteering: bOrU(data.poweredSteering),
+    steeringType: sOrU(data.steeringType),
+    hasSpareWheel: bOrU(data.hasSpareWheel),
+    airbags: nOrU(data.airbags),
+    hillAssist: bOrU(data.hillAssist),
+    rearViewCamera: bOrU(data.rearViewCamera),
+    parkingSensors: bOrU(data.parkingSensors),
+    cruiseControl: bOrU(data.cruiseControl),
+    displaySize: nOrU(data.carDisplaySize),
+    bluetooth: bOrU(data.carBluetooth),
+    navigation: bOrU(data.carNavigation),
+    smartConnectivity: bOrU(data.carSmartConnectivity),
+  };
+
+  return {
+    vehicleType: sOrU(String((data as Vehicle).vehicleType ?? "")),
+    description: sOrU(data.description ?? undefined),
+    colorsAvailableJson: sOrU(data.colorsAvailableJson ?? undefined),
+    warrantyYears: nOrU(data.warrantyYears),
+    serviceIntervalKm: nOrU(data.serviceIntervalKm),
+    engine: hasAnyValue(engine) ? engine : undefined,
+    ev: hasAnyValue(ev) ? ev : undefined,
+    dimensions: hasAnyValue(dimensions) ? dimensions : undefined,
+    dynamics: hasAnyValue(dynamics) ? dynamics : undefined,
+    bike: hasAnyValue(bike) ? bike : undefined,
+    car: hasAnyValue(car) ? car : undefined,
+  };
+}
 
 export function VehicleListPage() {
   const navigate = useNavigate();
@@ -144,7 +292,6 @@ export function VehicleListPage() {
   const [transFilter, setTransFilter] = useState<string>("all");
   const [yearFilter, setYearFilter] = useState<string>("all");
 
-  // NEW filters
   const [minPrice, setMinPrice] = useState<string>("");
   const [maxPrice, setMaxPrice] = useState<string>("");
   const [onlyHasSlug, setOnlyHasSlug] = useState(false);
@@ -156,7 +303,6 @@ export function VehicleListPage() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [editLoading, setEditLoading] = useState(false);
 
-  // Compare state
   const [compare, setCompare] = useState(loadCompare());
 
   const handleSortChange = (key: SortKey) => {
@@ -328,55 +474,10 @@ export function VehicleListPage() {
       } else if (mode === "edit" && editing?.id) {
         await updateVehicle(editing.id, data);
 
-        await updateVehicleDetails(editing.id, {
-          description: data.description,
-          colorsAvailableJson: data.colorsAvailableJson,
-          warrantyYears: data.warrantyYears,
-          serviceIntervalKm: data.serviceIntervalKm,
-
-          engine: {
-            engineType: data.engineType,
-            engineDisplacement: data.engineDisplacement,
-            fuelType: data.fuelType,
-            inductionType: data.inductionType,
-            emission: data.emission,
-            power: data.power,
-            powerRpm: data.powerRpm,
-            torque: data.torque,
-            torqueRpm: data.torqueRpm,
-            mileage: data.mileage,
-            range: data.range,
-          },
-
-          dimensions: {
-            length: data.length,
-            width: data.width,
-            height: data.height,
-            weight: data.weight,
-            groundClearance: data.groundClearance,
-            wheelBase: data.wheelBase,
-          },
-
-          dynamics: {
-            frontType: data.frontType,
-            backType: data.backType,
-            frontBrake: data.frontBrake,
-            backBrake: data.backBrake,
-            tyreSizeFront: data.tyreSizeFront,
-            tyreSizeBack: data.tyreSizeBack,
-            tyreType: data.tyreType,
-            wheelMaterial: data.wheelMaterial,
-          },
-
-          bike: { tankSize: data.tankSize },
-
-          car: {
-            personCapacity: data.personCapacity,
-            rows: data.rows,
-            doors: data.doors,
-            bootSpace: data.bootSpace,
-          },
-        });
+        const detailsPayload: UpdateVehicleDetailsRequest = buildDetailsReq(
+          data as VehicleFormModel
+        );
+        await updateVehicleDetails(editing.id, detailsPayload);
       }
 
       await reload();
@@ -486,7 +587,6 @@ export function VehicleListPage() {
           </select>
         </div>
 
-        {/* NEW FILTER ROW */}
         <div className="admin-filters-row" style={{ marginTop: 10 }}>
           <input
             type="number"
@@ -539,7 +639,6 @@ export function VehicleListPage() {
 
       {actionError && <div className="alert alert-error">{actionError}</div>}
 
-      {/*Compare CTA bar */}
       {compare.items.length >= 2 && (
         <div
           style={{

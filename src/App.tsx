@@ -1,3 +1,5 @@
+// src/App.tsx
+
 import { Routes, Route, Navigate } from "react-router-dom";
 
 import { PublicLayout } from "./app/layouts/PublicLayout";
@@ -7,22 +9,21 @@ import { RequireVehicleType } from "./app/guards/RequireVehicleType";
 
 import { VehiclesPage } from "./pages/public/VehiclesPage";
 import { VehicleDetailsPage } from "./pages/public/VehicleDetailsPage";
+import { VehicleVariantsPage } from "./pages/public/VehicleVariantsPage";
+import { VariantDetailsPage } from "./pages/public/VariantDetailsPage";
+
 import { LoginPage } from "./pages/admin/LoginPage";
 import { VehicleListPage } from "./features/vehicles/components/VehicleListPage";
 import { ComparePage } from "./features/vehicles/pages/ComparePage";
 
-//Selector
 import { VehicleTypeSelectPage } from "./pages/public/VehicleTypeSelectPage";
 
 export default function App() {
   return (
     <Routes>
-      {/* Public */}
       <Route element={<PublicLayout />}>
-        {/* Entry choice */}
         <Route path="/" element={<VehicleTypeSelectPage />} />
 
-        {/*Guarded public flow */}
         <Route
           path="/vehicles"
           element={
@@ -31,6 +32,7 @@ export default function App() {
             </RequireVehicleType>
           }
         />
+
         <Route
           path="/vehicles/:slug"
           element={
@@ -39,6 +41,25 @@ export default function App() {
             </RequireVehicleType>
           }
         />
+
+        <Route
+          path="/vehicles/:slug/variants"
+          element={
+            <RequireVehicleType>
+              <VehicleVariantsPage />
+            </RequireVehicleType>
+          }
+        />
+
+        <Route
+          path="/vehicles/:slug/variants/:variantSlug"
+          element={
+            <RequireVehicleType>
+              <VariantDetailsPage />
+            </RequireVehicleType>
+          }
+        />
+
         <Route
           path="/compare"
           element={
@@ -49,10 +70,8 @@ export default function App() {
         />
       </Route>
 
-      {/* Auth */}
       <Route path="/login" element={<LoginPage />} />
 
-      {/* Admin */}
       <Route
         path="/admin"
         element={
@@ -64,7 +83,6 @@ export default function App() {
         <Route path="vehicles" element={<VehicleListPage />} />
       </Route>
 
-      {/* Fallback */}
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

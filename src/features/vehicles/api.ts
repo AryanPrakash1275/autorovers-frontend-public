@@ -1,10 +1,7 @@
-// src/features/vehicles/api.ts
-
 import { apiGet, apiPost, apiPut, apiDelete } from "../../api/client";
 import type {
   Vehicle,
   VehicleListItem,
-  VehicleDetailsDto,
   VehicleWithDetailsDto,
   VehicleVariantDto,
   FuelType,
@@ -81,6 +78,95 @@ export type CreateVehicleRequest = {
   serviceIntervalKm?: number | null;
 };
 
+export type UpdateVehicleDetailsRequest = {
+  vehicleType?: string;
+
+  description?: string;
+  colorsAvailableJson?: string;
+  warrantyYears?: number;
+  serviceIntervalKm?: number;
+
+  engine?: {
+    engineType?: string;
+    engineDisplacement?: number;
+    inductionType?: string;
+    emission?: string;
+    power?: number;
+    powerRpm?: number;
+    torque?: number;
+    torqueRpm?: number;
+    mileage?: number;
+    range?: number;
+    fuelType?: FuelType | string;
+  };
+
+  ev?: {
+    batteryCapacity?: number;
+    chargingTimeFast?: number;
+    chargingTimeNormal?: number;
+    motorPower?: number;
+    motorTorque?: number;
+    fastChargingPort?: boolean;
+    range?: number;
+  };
+
+  dimensions?: {
+    length?: number;
+    width?: number;
+    height?: number;
+    wheelBase?: number;
+    groundClearance?: number;
+    weight?: number;
+    turningRadius?: number;
+  };
+
+  dynamics?: {
+    frontType?: string;
+    backType?: string;
+    frontBrake?: string;
+    backBrake?: string;
+    frontSuspension?: string;
+    rearSuspension?: string;
+    tyreSizeFront?: string;
+    tyreSizeBack?: string;
+    tyreType?: string;
+    wheelMaterial?: string;
+  };
+
+  bike?: {
+    numberOfGears?: number;
+    tankSize?: number;
+    abs?: boolean;
+    tractionControl?: boolean;
+    displaySize?: number;
+    bluetooth?: boolean;
+    navigation?: boolean;
+    smartConnectivity?: boolean;
+  };
+
+  car?: {
+    driveType?: string;
+    zeroToHundred?: number;
+    topSpeed?: number;
+    personCapacity?: number;
+    rows?: number;
+    doors?: number;
+    bootSpace?: number;
+    poweredSteering?: boolean;
+    steeringType?: string;
+    hasSpareWheel?: boolean;
+    airbags?: number;
+    hillAssist?: boolean;
+    rearViewCamera?: boolean;
+    parkingSensors?: boolean;
+    cruiseControl?: boolean;
+    displaySize?: number;
+    bluetooth?: boolean;
+    navigation?: boolean;
+    smartConnectivity?: boolean;
+  };
+};
+
 function toQueryString(params: Record<string, unknown>): string {
   const qs = new URLSearchParams();
 
@@ -138,12 +224,10 @@ function clampPageSize(n: unknown): number {
   return Math.min(MAX_PAGE_SIZE, Math.floor(v));
 }
 
-// ===== ADMIN LIST =====
 export async function getVehicles(): Promise<VehicleListItem[]> {
   return apiGet<VehicleListItem[]>(ADMIN_VEHICLES_PATH);
 }
 
-// ===== ADMIN SINGLE =====
 export async function getVehicle(id: number): Promise<Vehicle> {
   return apiGet<Vehicle>(`${ADMIN_VEHICLES_PATH}/${id}`);
 }
@@ -162,19 +246,20 @@ export async function deleteVehicleById(id: number): Promise<void> {
   return apiDelete<void>(`${ADMIN_VEHICLES_PATH}/${id}`);
 }
 
-// ===== ADMIN DETAILS =====
 export function getVehicleWithDetails(id: number): Promise<VehicleWithDetailsDto> {
   return apiGet<VehicleWithDetailsDto>(`${ADMIN_VEHICLES_PATH}/${id}/details`);
 }
 
 export function updateVehicleDetails(
   id: number,
-  payload: VehicleDetailsDto
+  payload: UpdateVehicleDetailsRequest
 ): Promise<void> {
-  return apiPut<VehicleDetailsDto, void>(`${ADMIN_VEHICLES_PATH}/${id}/details`, payload);
+  return apiPut<UpdateVehicleDetailsRequest, void>(
+    `${ADMIN_VEHICLES_PATH}/${id}/details`,
+    payload
+  );
 }
 
-// ===== PUBLIC LIST (PAGED) =====
 export async function getPublicVehicles(
   query: PublicVehiclesQuery
 ): Promise<PagedResult<VehicleListItem>> {
@@ -199,7 +284,6 @@ export async function getPublicVehicles(
 
   const raw = await apiGet<unknown>(`${PUBLIC_VEHICLES_PATH}${qs}`);
 
-  // backward-compat: if API returns array
   if (Array.isArray(raw)) {
     const items = raw as VehicleListItem[];
     return { items, page, pageSize, totalCount: items.length };
@@ -210,14 +294,12 @@ export async function getPublicVehicles(
   return { items: [], page, pageSize, totalCount: 0 };
 }
 
-// ===== PUBLIC DETAILS =====
 export async function getPublicVehicleBySlug(slug: string): Promise<VehicleWithDetailsDto> {
   return apiGet<VehicleWithDetailsDto>(
     `${PUBLIC_VEHICLES_PATH}/slug/${encodeURIComponent(slug)}`
   );
 }
 
-// ===== Variants (Admin) =====
 export async function getAdminVariants(vehicleId: number): Promise<VehicleVariantDto[]> {
   return apiGet<VehicleVariantDto[]>(`/api/Admin/Vehicles/${vehicleId}/variants`);
 }

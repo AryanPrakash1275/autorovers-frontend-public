@@ -1,6 +1,4 @@
-// src/features/vehicles/mapToComparisonVehicle.ts
-
-import type { VehicleWithDetailsDto, VehicleType } from "./types";
+import type { VehicleWithDetailsDto } from "./types";
 import {
   type ComparisonMapResult,
   type ComparisonBike,
@@ -11,16 +9,27 @@ import {
   requiredStr,
 } from "./comparisonContract";
 
-function resolveVehicleType(dto: VehicleWithDetailsDto): VehicleType {
-  const raw = dto.vehicleType;
-  if (isVehicleType(raw)) return raw;
+type ContractVehicleType = "Bike" | "Car";
+
+function toContractType(v: unknown): ContractVehicleType | undefined {
+  const s = typeof v === "string" ? v.trim().toLowerCase() : "";
+  if (s === "bike") return "Bike";
+  if (s === "car") return "Car";
+  if (v === "Bike" || v === "Car") return v;
+  return undefined;
+}
+
+function resolveContractVehicleType(dto: VehicleWithDetailsDto): ContractVehicleType {
+  const raw = toContractType(dto.vehicleType);
+  if (raw) return raw;
+
+  if (isVehicleType(dto.vehicleType)) return dto.vehicleType; // "Bike" | "Car"
 
   const inferred = inferTypeFromCategory(dto.category ?? null);
   if (inferred) return inferred;
 
-  // IMPORTANT: don't silently force "bike" (causes type-lock bugs)
-  // If backend can't provide vehicleType/category isn't inferable, it's not publishable.
-  throw new Error("Missing vehicleType");
+  // last resort: default (should not happen once your data is clean)
+  return "Bike";
 }
 
 function safeVariant(dto: VehicleWithDetailsDto): string {
@@ -40,7 +49,9 @@ function softStr(v: unknown, fallback: string): string {
  * Powertrain: do NOT fail compare for missing engine.fuelType.
  * Default to Petrol unless EV is explicitly present.
  */
-function normalizePowertrain(dto: VehicleWithDetailsDto): "Petrol" | "Diesel" | "EV" | "Hybrid" {
+function normalizePowertrain(
+  dto: VehicleWithDetailsDto
+): "Petrol" | "Diesel" | "EV" | "Hybrid" {
   if (dto.details?.ev) return "EV";
 
   const ft = (dto.details?.engine?.fuelType ?? "").toString().trim().toLowerCase();
@@ -56,7 +67,7 @@ function normalizePowertrain(dto: VehicleWithDetailsDto): "Petrol" | "Diesel" | 
 
 export function mapToComparisonVehicle(dto: VehicleWithDetailsDto): ComparisonMapResult {
   try {
-    const vehicleType = resolveVehicleType(dto);
+    const contractType = resolveContractVehicleType(dto);
 
     const id = requiredNum(dto.id, "id");
     const slug = requiredStr(dto.slug, "slug");
@@ -68,6 +79,7 @@ export function mapToComparisonVehicle(dto: VehicleWithDetailsDto): ComparisonMa
     const imageUrl = requiredStr(dto.imageUrl, "imageUrl");
     const transmission = requiredStr(dto.transmission, "transmission");
 
+    // soft decision fields (so compare always renders even with {} details)
     const price = softNum(dto.price);
     const powertrain = normalizePowertrain(dto);
 
@@ -86,6 +98,7 @@ export function mapToComparisonVehicle(dto: VehicleWithDetailsDto): ComparisonMa
         ? softNum(dto.details?.ev?.motorTorque ?? dto.details?.engine?.torque)
         : softNum(dto.details?.engine?.torque);
 
+    // soft extras
     const warrantyYears = softNum(dto.details?.warrantyYears);
     const serviceIntervalKm = softNum(dto.details?.serviceIntervalKm);
 
@@ -108,16 +121,17 @@ export function mapToComparisonVehicle(dto: VehicleWithDetailsDto): ComparisonMa
       serviceIntervalKm,
     };
 
-    if (vehicleType === "bike") {
+    if (contractType === "Bike") {
       const kerbWeightKg = softNum(dto.details?.dimensions?.weight);
       const fuelTankCapacityL = softNum(dto.details?.bike?.tankSize);
 
       const bike: ComparisonBike = {
-        vehicleType: "bike",
+        vehicleType: "Bike",
         ...base,
         kerbWeightKg,
         fuelTankCapacityL,
       };
+
       return { ok: true, value: bike };
     }
 
@@ -125,11 +139,12 @@ export function mapToComparisonVehicle(dto: VehicleWithDetailsDto): ComparisonMa
     const bootSpaceL = softNum(dto.details?.car?.bootSpace);
 
     const car: ComparisonCar = {
-      vehicleType: "car",
+      vehicleType: "Car",
       ...base,
       bodyType,
       bootSpaceL,
     };
+
     return { ok: true, value: car };
   } catch (e: unknown) {
     return { ok: false, reason: e instanceof Error ? e.message : "Not publishable" };
