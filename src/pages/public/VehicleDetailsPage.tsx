@@ -8,13 +8,23 @@ import type {
   VehicleListItem,
 } from "../../features/vehicles/types";
 import { getPublicVehicleBySlug } from "../../features/vehicles/api";
-import { loadCompare, toggleCompareWithResult, onCompareChanged } from "../../features/vehicles/compareState";
+import { loadCompare, onCompareChanged } from "../../features/vehicles/compareState";
 import { Footer } from "../../shared/ui/Footer";
 import { getSelectedVehicleType, onVehicleTypeChanged, type VehicleType } from "../../features/vehicles/vehicleTypeStorage";
 
 type MaybeError = { message?: string };
 
 const FALLBACK_IMG = "https://dummyimage.com/600x400/cccccc/000000&text=No+Image";
+
+type CompareState = ReturnType<typeof loadCompare>;
+
+function saveCompare(next: CompareState) {
+  try {
+    localStorage.setItem("autorovers_compare_v1", JSON.stringify(next));
+  } catch {
+    // ignore
+  }
+}
 
 function hasValue(v: unknown): boolean {
   if (v === null || v === undefined) return false;
@@ -85,8 +95,8 @@ function inferSelectedTypeFromCategory(catRaw: unknown): VehicleType | undefined
   const c = norm(catRaw);
   if (!c) return undefined;
 
-  const bike = new Set(["Sport", "Commuter", "Cruiser", "Tourer", "Off-road", "Scooter", "EV Bike"].map((x) => x.toLowerCase()));
-  const car = new Set(["Hatchback", "Sedan", "SUV", "MUV", "Coupe", "EV Car"].map((x) => x.toLowerCase()));
+  const bike = new Set(["sport", "commuter", "cruiser", "tourer", "off-road", "scooter", "ev bike"]);
+  const car = new Set(["hatchback", "sedan", "suv", "muv", "coupe", "ev car"]);
 
   if (bike.has(c)) return "bike";
   if (car.has(c)) return "car";
@@ -131,7 +141,7 @@ export function VehicleDetailsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const [compare, setCompare] = useState(loadCompare());
+  const [compare, setCompare] = useState<CompareState>(loadCompare());
 
   useEffect(() => {
     const off = onCompareChanged(setCompare);
@@ -157,7 +167,9 @@ export function VehicleDetailsPage() {
   }, [vehicle?.variants]);
 
   const startsFromNumber = useMemo(() => {
-    const prices = (variants ?? []).map((v) => (typeof v.price === "number" && Number.isFinite(v.price) ? v.price : 0)).filter((x) => x > 0);
+    const prices = (variants ?? [])
+      .map((v) => (typeof v.price === "number" && Number.isFinite(v.price) ? v.price : 0))
+      .filter((x) => x > 0);
     const minVariant = prices.length ? Math.min(...prices) : 0;
     const base = typeof vehicle?.price === "number" && Number.isFinite(vehicle.price) ? vehicle.price : 0;
     return minVariant > 0 ? minVariant : base > 0 ? base : 0;
@@ -286,11 +298,22 @@ export function VehicleDetailsPage() {
     if (!vehicle) return;
 
     const cur = loadCompare();
-    const item = asComparableListItem(vehicle);
-    const res = toggleCompareWithResult(cur, item);
+    const exists = cur.items.some((x) => x.id === vehicle.id);
 
-    setCompare(res.state);
-    if (!res.ok) window.alert(res.reason);
+    if (!exists && cur.items.length >= 4) {
+      window.alert("You can compare up to 4 vehicles.");
+      return;
+    }
+
+    const next: CompareState = exists
+      ? { ...cur, items: cur.items.filter((x) => x.id !== vehicle.id) }
+      : {
+          ...cur,
+          items: [...cur.items, asComparableListItem(vehicle)],
+        };
+
+    saveCompare(next);
+    setCompare(next);
   }
 
   const compared = useMemo(() => {
@@ -358,10 +381,18 @@ export function VehicleDetailsPage() {
           </div>
 
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 12 }}>
-            <Link to={`/vehicles/${encodedSlug}/variants`} className="public-btn public-btn--primary" style={{ textDecoration: "none" }}>
+            <Link
+              to={`/vehicles/${encodedSlug}/variants`}
+              className="public-btn public-btn--primary"
+              style={{ textDecoration: "none" }}
+            >
               View all variants →
             </Link>
-            <Link to={`/vehicles/${encodedSlug}/variants`} className="public-btn public-btn--ghost" style={{ textDecoration: "none" }}>
+            <Link
+              to={`/vehicles/${encodedSlug}/variants`}
+              className="public-btn public-btn--ghost"
+              style={{ textDecoration: "none" }}
+            >
               Prices & add-ons →
             </Link>
           </div>
@@ -415,7 +446,11 @@ export function VehicleDetailsPage() {
           </section>
         )}
 
-        {(hasValue(engineType) || hasValue(inductionType) || hasValue(emission) || hasValue(eng.fuelType) || hasValue(d.fuelType)) && (
+        {(hasValue(engineType) ||
+          hasValue(inductionType) ||
+          hasValue(emission) ||
+          hasValue(eng.fuelType) ||
+          hasValue(d.fuelType)) && (
           <section className="spec-card">
             <h2>Powertrain</h2>
             <dl>
@@ -484,7 +519,11 @@ export function VehicleDetailsPage() {
           </section>
         )}
 
-        {(hasValue(personCapacity) || hasValue(rows) || hasValue(doors) || hasValue(bootSpace) || hasValue(tankSize)) && (
+        {(hasValue(personCapacity) ||
+          hasValue(rows) ||
+          hasValue(doors) ||
+          hasValue(bootSpace) ||
+          hasValue(tankSize)) && (
           <section className="spec-card">
             <h2>Capacity</h2>
             <dl>

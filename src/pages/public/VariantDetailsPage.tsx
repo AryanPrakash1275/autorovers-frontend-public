@@ -1,32 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { getPublicVehicleBySlug } from "../../features/vehicles/api";
+import { getPublicVehicleBySlug, getPublicVariantBySlug } from "../../features/vehicles/api";
 import type { VehicleVariantDto, VehicleWithDetailsDto } from "../../features/vehicles/types";
-
-type VariantSlugField = { slug?: string | null };
-
-type VariantAddonLite = {
-  id?: string | number | null;
-  name?: string | null;
-  price?: number | null;
-};
-
-type VariantWithAddons = VehicleVariantDto & {
-  addons?: VariantAddonLite[] | null;
-};
 
 function toMessage(err: unknown, fallback: string) {
   return err instanceof Error ? err.message : fallback;
-}
-
-function slugifyVariantName(name: string): string {
-  return name
-    .toLowerCase()
-    .trim()
-    .replace(/&/g, " and ")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/-+/g, "-")
-    .replace(/^-|-$/g, "");
 }
 
 function formatINR(n?: number | null): string {
@@ -38,13 +16,19 @@ function safeNumber(n: unknown): number {
   return typeof n === "number" && Number.isFinite(n) ? n : 0;
 }
 
+function normText(v: unknown): string {
+  return typeof v === "string" ? v.trim() : "";
+}
+
 export function VariantDetailsPage() {
   const navigate = useNavigate();
   const { slug, variantSlug } = useParams();
 
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
-  const [data, setData] = useState<VehicleWithDetailsDto | null>(null);
+
+  const [vehicle, setVehicle] = useState<VehicleWithDetailsDto | null>(null);
+  const [variant, setVariant] = useState<VehicleVariantDto | null>(null);
 
   useEffect(() => {
     if (!slug) {
@@ -64,9 +48,16 @@ export function VariantDetailsPage() {
       try {
         setLoading(true);
         setError(null);
-        const res = await getPublicVehicleBySlug(slug);
+
+        const [veh, vr] = await Promise.all([
+          getPublicVehicleBySlug(slug),
+          getPublicVariantBySlug(slug, variantSlug),
+        ]);
+
         if (!alive) return;
-        setData(res);
+
+        setVehicle(veh);
+        setVariant(vr);
       } catch (e: unknown) {
         if (!alive) return;
         setError(toMessage(e, "Failed to load variant."));
@@ -81,38 +72,15 @@ export function VariantDetailsPage() {
   }, [slug, variantSlug]);
 
   const vehicleTitle = useMemo(() => {
-    const b = data?.brand?.trim() ?? "";
-    const m = data?.model?.trim() ?? "";
+    const b = vehicle?.brand?.trim() ?? "";
+    const m = vehicle?.model?.trim() ?? "";
     const head = [b, m].filter(Boolean).join(" ");
     return head || "Vehicle";
-  }, [data]);
-
-  const variant = useMemo<VariantWithAddons | null>(() => {
-    const list = data?.variants ?? [];
-    if (!Array.isArray(list) || !variantSlug) return null;
-
-    const normalized = decodeURIComponent(variantSlug).toLowerCase().trim();
-
-    const byBackendSlug = list.find((v) => {
-      const s = (v as VehicleVariantDto & VariantSlugField).slug;
-      return typeof s === "string" && s.toLowerCase().trim() === normalized;
-    }) as VariantWithAddons | undefined;
-    if (byBackendSlug) return byBackendSlug;
-
-    const byNameSlug = list.find((v) => slugifyVariantName(v.name ?? "") === normalized) as
-      | VariantWithAddons
-      | undefined;
-    if (byNameSlug) return byNameSlug;
-
-    const byId = list.find((v) => String(v.id) === normalized) as VariantWithAddons | undefined;
-    if (byId) return byId;
-
-    return null;
-  }, [data, variantSlug]);
+  }, [vehicle]);
 
   const pricing = useMemo(() => {
     const base = safeNumber(variant?.price);
-    const addons = Array.isArray(variant?.addons) ? variant!.addons : [];
+    const addons = Array.isArray(variant?.addons) ? variant.addons : [];
     const addonsTotal = addons.reduce((sum, a) => sum + safeNumber(a.price), 0);
     const finalPrice = base > 0 ? base + addonsTotal : 0;
     return { base, addons, addonsTotal, finalPrice };
@@ -120,7 +88,11 @@ export function VariantDetailsPage() {
 
   if (loading) return <div style={{ padding: "1.25rem" }}>Loading…</div>;
   if (error) return <div style={{ padding: "1.25rem", color: "crimson" }}>{error}</div>;
-  if (!data || !slug) return <div style={{ padding: "1.25rem" }}>Not found.</div>;
+  if (!slug) return <div style={{ padding: "1.25rem" }}>Not found.</div>;
+
+  if (!vehicle) {
+    return <div style={{ padding: "1.25rem" }}>Vehicle not found.</div>;
+  }
 
   if (!variant) {
     return (
@@ -136,7 +108,9 @@ export function VariantDetailsPage() {
     );
   }
 
-  const variantName = variant.name?.trim() || "Variant";
+  const variantName = normText(variant.name) || "Variant";
+  const fuel = normText(variant.fuelType);
+  const transmission = normText(variant.transmission);
 
   return (
     <div style={{ padding: "1.25rem", maxWidth: 960, margin: "0 auto" }}>
@@ -180,6 +154,10 @@ export function VariantDetailsPage() {
           <div>
             <div style={{ fontSize: 14, opacity: 0.7 }}>Base (ex-showroom)</div>
             <div style={{ fontSize: 24, fontWeight: 900 }}>{formatINR(pricing.base)}</div>
+            <div style={{ marginTop: 8, display: "flex", gap: 10, flexWrap: "wrap", fontSize: 13, opacity: 0.85 }}>
+              {fuel ? <span>Fuel: <strong>{fuel}</strong></span> : null}
+              {transmission ? <span>Transmission: <strong>{transmission}</strong></span> : null}
+            </div>
           </div>
 
           {variant.isDefault ? (
@@ -205,7 +183,7 @@ export function VariantDetailsPage() {
           {pricing.addons.length > 0 ? (
             <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}>
               {pricing.addons.map((a, idx) => {
-                const name = a.name?.trim() || "Addon";
+                const name = normText(a.name) || "Addon";
                 const key = a.id != null ? String(a.id) : `${name}-${idx}`;
                 const price = safeNumber(a.price);
 

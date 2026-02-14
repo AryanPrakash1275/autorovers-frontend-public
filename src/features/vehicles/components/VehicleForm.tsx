@@ -9,6 +9,7 @@ import {
   type FormEvent,
   type SetStateAction,
 } from "react";
+
 import { POPULAR_BRANDS } from "./vehicleFormOptions";
 import {
   NUMBER_FIELDS,
@@ -21,6 +22,7 @@ import {
 } from "./vehicleFormUtils";
 
 import type { Vehicle } from "../types";
+import { VehicleVariantsEditor } from "./VehicleVariantsEditor";
 
 type Props = {
   initial?: Vehicle | null;
@@ -29,7 +31,7 @@ type Props = {
   onCancel: () => void;
 };
 
-type Tab = "basics" | "specs";
+type Tab = "basics" | "specs" | "variants";
 
 type RequiredField =
   | "brand"
@@ -54,7 +56,6 @@ function clampInt(n: number, min: number, max: number) {
   return Math.min(max, Math.max(min, Math.trunc(n)));
 }
 
-// ✅ prevents accidental boolean in <input value=...>
 function safeInputValue(v: unknown): string | number {
   if (typeof v === "number") return Number.isFinite(v) ? v : 0;
   if (typeof v === "string") return v;
@@ -138,9 +139,14 @@ export function VehicleForm({ initial, mode, onSubmit, onCancel }: Props) {
   const [activeTab, setActiveTab] = useState<Tab>("basics");
   const [errors, setErrors] = useState<FormErrors>({});
 
-  const initBrand = useMemo(() => initBrandState(initial?.brand), [initial?.brand]);
+  const initBrand = useMemo(
+    () => initBrandState(initial?.brand),
+    [initial?.brand]
+  );
   const [selectedBrand, setSelectedBrand] = useState(initBrand.selectedBrand);
   const [customBrand, setCustomBrand] = useState(initBrand.customBrand);
+
+  const canEditVariants = mode === "edit" && (initial?.id ?? 0) > 0;
 
   useEffect(() => {
     if (!initial) return;
@@ -161,11 +167,14 @@ export function VehicleForm({ initial, mode, onSubmit, onCancel }: Props) {
     setCustomBrand(b.customBrand);
   }, [initial]);
 
-  // keep vehicleType synced from category (canonical)
   useEffect(() => {
     if (!form.category) return;
 
-    const minimal = { category: form.category, vehicleType: form.vehicleType } as Vehicle;
+    const minimal = {
+      category: form.category,
+      vehicleType: form.vehicleType,
+    } as Vehicle;
+
     const inferred = inferVehicleTypeFromCategory(minimal);
     if (!inferred) return;
 
@@ -179,7 +188,10 @@ export function VehicleForm({ initial, mode, onSubmit, onCancel }: Props) {
   const isBike = vehicleType === "bike";
   const isCar = vehicleType === "car";
 
-  const categoryOptions = useMemo(() => getCategoryOptions(vehicleType), [vehicleType]);
+  const categoryOptions = useMemo(
+    () => getCategoryOptions(vehicleType),
+    [vehicleType]
+  );
   const transmissionOptions = useMemo(
     () => getTransmissionOptions(vehicleType),
     [vehicleType]
@@ -201,7 +213,10 @@ export function VehicleForm({ initial, mode, onSubmit, onCancel }: Props) {
       const next: Vehicle = { ...prev };
       const key = name as keyof Vehicle;
 
-      if (e.target instanceof HTMLInputElement && e.target.type === "checkbox") {
+      if (
+        e.target instanceof HTMLInputElement &&
+        e.target.type === "checkbox"
+      ) {
         (next as unknown as Record<string, unknown>)[name] = e.target.checked;
         return next;
       }
@@ -210,7 +225,9 @@ export function VehicleForm({ initial, mode, onSubmit, onCancel }: Props) {
 
       if (NUMBER_FIELDS.has(key)) {
         const num = value === "" ? 0 : Number(value);
-        (next as unknown as Record<string, unknown>)[name] = Number.isFinite(num) ? num : 0;
+        (next as unknown as Record<string, unknown>)[name] = Number.isFinite(num)
+          ? num
+          : 0;
       } else {
         (next as unknown as Record<string, unknown>)[name] = value;
       }
@@ -314,6 +331,16 @@ export function VehicleForm({ initial, mode, onSubmit, onCancel }: Props) {
           >
             Specifications
           </button>
+
+          {canEditVariants && (
+            <button
+              type="button"
+              className={`form-tab ${activeTab === "variants" ? "is-active" : ""}`}
+              onClick={() => setActiveTab("variants")}
+            >
+              Variants
+            </button>
+          )}
         </div>
       </div>
 
@@ -335,7 +362,16 @@ export function VehicleForm({ initial, mode, onSubmit, onCancel }: Props) {
         )}
 
         {activeTab === "specs" && (
-          <SpecsTab form={form} isBike={isBike} isCar={isCar} handleChange={handleChange} />
+          <SpecsTab
+            form={form}
+            isBike={isBike}
+            isCar={isCar}
+            handleChange={handleChange}
+          />
+        )}
+
+        {activeTab === "variants" && canEditVariants && (
+          <VehicleVariantsEditor vehicleId={initial!.id} />
         )}
       </div>
 
@@ -391,12 +427,18 @@ function BasicsTab({
     <div className="form-grid">
       <div className={`field ${errors.vehicleType ? "has-error" : ""}`}>
         <label>Vehicle Type *</label>
-        <select name="vehicleType" value={String(vehicleType)} onChange={handleChange}>
+        <select
+          name="vehicleType"
+          value={String(vehicleType)}
+          onChange={handleChange}
+        >
           <option value="">Select type</option>
           <option value="bike">Bike</option>
           <option value="car">Car</option>
         </select>
-        {errors.vehicleType && <div className="field-error">{errors.vehicleType}</div>}
+        {errors.vehicleType && (
+          <div className="field-error">{errors.vehicleType}</div>
+        )}
       </div>
 
       <div className={`field ${errors.brand ? "has-error" : ""}`}>
@@ -444,38 +486,57 @@ function BasicsTab({
 
       <div className={`field ${errors.model ? "has-error" : ""}`}>
         <label>Model *</label>
-        <input name="model" value={safeInputValue(form.model)} onChange={handleChange} />
+        <input
+          name="model"
+          value={safeInputValue(form.model)}
+          onChange={handleChange}
+        />
         {errors.model && <div className="field-error">{errors.model}</div>}
       </div>
 
       <div className="field">
         <label>Variant</label>
-        <input name="variant" value={safeInputValue(form.variant)} onChange={handleChange} />
+        <input
+          name="variant"
+          value={safeInputValue(form.variant)}
+          onChange={handleChange}
+        />
       </div>
 
       <div className={`field ${errors.year ? "has-error" : ""}`}>
         <label>Year *</label>
         <select name="year" value={String(form.year)} onChange={handleChange}>
           <option value="">Select year</option>
-          {Array.from({ length: 2050 - 1980 + 1 }, (_, i) => 1980 + i).map((y) => (
-            <option key={y} value={y}>
-              {y}
-            </option>
-          ))}
+          {Array.from({ length: 2050 - 1980 + 1 }, (_, i) => 1980 + i).map(
+            (y) => (
+              <option key={y} value={y}>
+                {y}
+              </option>
+            )
+          )}
         </select>
         {errors.year && <div className="field-error">{errors.year}</div>}
       </div>
 
       <div className={`field ${errors.price ? "has-error" : ""}`}>
         <label>Price (₹) *</label>
-        <input type="number" name="price" value={Number(form.price ?? 0)} onChange={handleChange} />
+        <input
+          type="number"
+          name="price"
+          value={Number(form.price ?? 0)}
+          onChange={handleChange}
+        />
         {errors.price && <div className="field-error">{errors.price}</div>}
       </div>
 
       {vehicleType && (
         <div className={`field ${errors.category ? "has-error" : ""}`}>
           <label>Category *</label>
-          <select name="category" value={safeInputValue(form.category)} onChange={handleChange}>
+          <select
+            name="category"
+            value={safeInputValue(form.category)}
+            onChange={handleChange}
+          >
             <option value="">Select category</option>
             {categoryOptions.map((c) => (
               <option key={c} value={c}>
@@ -495,19 +556,27 @@ function BasicsTab({
           onChange={handleChange}
           disabled={!vehicleType || transmissionOptions.length === 0}
         >
-          <option value="">{vehicleType ? "Select" : "Select vehicle type first"}</option>
+          <option value="">
+            {vehicleType ? "Select" : "Select vehicle type first"}
+          </option>
           {transmissionOptions.map((t) => (
             <option key={t} value={t}>
               {t}
             </option>
           ))}
         </select>
-        {errors.transmission && isCar && <div className="field-error">{errors.transmission}</div>}
+        {errors.transmission && isCar && (
+          <div className="field-error">{errors.transmission}</div>
+        )}
       </div>
 
       <div className={`field ${errors.imageUrl ? "has-error" : ""}`}>
         <label>Image URL</label>
-        <input name="imageUrl" value={safeInputValue(form.imageUrl)} onChange={handleChange} />
+        <input
+          name="imageUrl"
+          value={safeInputValue(form.imageUrl)}
+          onChange={handleChange}
+        />
         {errors.imageUrl && <div className="field-error">{errors.imageUrl}</div>}
       </div>
 
@@ -605,7 +674,11 @@ function SpecsTab({ form, isBike, isCar, handleChange }: SpecsTabProps) {
       <div className="form-grid">
         <div className="field">
           <label>Engine type</label>
-          <input name="engineType" value={String(form.engineType ?? "")} onChange={handleChange} />
+          <input
+            name="engineType"
+            value={String(form.engineType ?? "")}
+            onChange={handleChange}
+          />
         </div>
 
         <div className="field">
@@ -620,53 +693,99 @@ function SpecsTab({ form, isBike, isCar, handleChange }: SpecsTabProps) {
 
         <div className="field">
           <label>Fuel type</label>
-          <input name="fuelType" value={String(form.fuelType ?? "")} onChange={handleChange} />
+          <input
+            name="fuelType"
+            value={String(form.fuelType ?? "")}
+            onChange={handleChange}
+          />
         </div>
 
         <div className="field">
           <label>Specification</label>
-          <input name="specification" value={String(form.specification ?? "")} onChange={handleChange} />
+          <input
+            name="specification"
+            value={String(form.specification ?? "")}
+            onChange={handleChange}
+          />
         </div>
 
         <div className="field">
           <label>Induction</label>
-          <input name="inductionType" value={String(form.inductionType ?? "")} onChange={handleChange} />
+          <input
+            name="inductionType"
+            value={String(form.inductionType ?? "")}
+            onChange={handleChange}
+          />
         </div>
 
         <div className="field">
           <label>Power (bhp)</label>
-          <input type="number" name="power" value={Number(form.power ?? 0)} onChange={handleChange} />
+          <input
+            type="number"
+            name="power"
+            value={Number(form.power ?? 0)}
+            onChange={handleChange}
+          />
         </div>
 
         <div className="field">
           <label>Power RPM</label>
-          <input type="number" name="powerRpm" value={Number(form.powerRpm ?? 0)} onChange={handleChange} />
+          <input
+            type="number"
+            name="powerRpm"
+            value={Number(form.powerRpm ?? 0)}
+            onChange={handleChange}
+          />
         </div>
 
         <div className="field">
           <label>Torque (Nm)</label>
-          <input type="number" name="torque" value={Number(form.torque ?? 0)} onChange={handleChange} />
+          <input
+            type="number"
+            name="torque"
+            value={Number(form.torque ?? 0)}
+            onChange={handleChange}
+          />
         </div>
 
         <div className="field">
           <label>Torque RPM</label>
-          <input type="number" name="torqueRpm" value={Number(form.torqueRpm ?? 0)} onChange={handleChange} />
+          <input
+            type="number"
+            name="torqueRpm"
+            value={Number(form.torqueRpm ?? 0)}
+            onChange={handleChange}
+          />
         </div>
 
         <div className="field">
           <label>Emission</label>
-          <input name="emission" value={String(form.emission ?? "")} onChange={handleChange} />
+          <input
+            name="emission"
+            value={String(form.emission ?? "")}
+            onChange={handleChange}
+          />
         </div>
 
         <div className="field">
           <label>Mileage (kmpl)</label>
-          <input type="number" name="mileage" value={Number(form.mileage ?? 0)} onChange={handleChange} />
+          <input
+            type="number"
+            name="mileage"
+            value={Number(form.mileage ?? 0)}
+            onChange={handleChange}
+          />
         </div>
 
         {(isBike || isCar) && (
           <div className="field">
             <label>Range (km)</label>
-            <input type="number" name="range" value={Number(form.range ?? 0)} onChange={handleChange} />
+            <input
+              type="number"
+              name="range"
+              value={Number(form.range ?? 0)}
+              onChange={handleChange}
+            />
           </div>
         )}
 
@@ -686,22 +805,42 @@ function SpecsTab({ form, isBike, isCar, handleChange }: SpecsTabProps) {
       <div className="form-grid">
         <div className="field">
           <label>Length (mm)</label>
-          <input type="number" name="length" value={Number(form.length ?? 0)} onChange={handleChange} />
+          <input
+            type="number"
+            name="length"
+            value={Number(form.length ?? 0)}
+            onChange={handleChange}
+          />
         </div>
 
         <div className="field">
           <label>Width (mm)</label>
-          <input type="number" name="width" value={Number(form.width ?? 0)} onChange={handleChange} />
+          <input
+            type="number"
+            name="width"
+            value={Number(form.width ?? 0)}
+            onChange={handleChange}
+          />
         </div>
 
         <div className="field">
           <label>Height (mm)</label>
-          <input type="number" name="height" value={Number(form.height ?? 0)} onChange={handleChange} />
+          <input
+            type="number"
+            name="height"
+            value={Number(form.height ?? 0)}
+            onChange={handleChange}
+          />
         </div>
 
         <div className="field">
           <label>Wheelbase (mm)</label>
-          <input type="number" name="wheelBase" value={Number(form.wheelBase ?? 0)} onChange={handleChange} />
+          <input
+            type="number"
+            name="wheelBase"
+            value={Number(form.wheelBase ?? 0)}
+            onChange={handleChange}
+          />
         </div>
 
         <div className="field">
@@ -716,7 +855,12 @@ function SpecsTab({ form, isBike, isCar, handleChange }: SpecsTabProps) {
 
         <div className="field">
           <label>Kerb weight (kg)</label>
-          <input type="number" name="weight" value={Number(form.weight ?? 0)} onChange={handleChange} />
+          <input
+            type="number"
+            name="weight"
+            value={Number(form.weight ?? 0)}
+            onChange={handleChange}
+          />
         </div>
       </div>
 
@@ -736,27 +880,51 @@ function SpecsTab({ form, isBike, isCar, handleChange }: SpecsTabProps) {
 
             <div className="field">
               <label>Rows</label>
-              <input type="number" name="rows" value={Number(form.rows ?? 0)} onChange={handleChange} />
+              <input
+                type="number"
+                name="rows"
+                value={Number(form.rows ?? 0)}
+                onChange={handleChange}
+              />
             </div>
 
             <div className="field">
               <label>Doors</label>
-              <input type="number" name="doors" value={Number(form.doors ?? 0)} onChange={handleChange} />
+              <input
+                type="number"
+                name="doors"
+                value={Number(form.doors ?? 0)}
+                onChange={handleChange}
+              />
             </div>
 
             <div className="field">
               <label>Boot space (L)</label>
-              <input type="number" name="bootSpace" value={Number(form.bootSpace ?? 0)} onChange={handleChange} />
+              <input
+                type="number"
+                name="bootSpace"
+                value={Number(form.bootSpace ?? 0)}
+                onChange={handleChange}
+              />
             </div>
 
             <div className="field">
               <label>Tank size (L)</label>
-              <input type="number" name="tankSize" value={Number(form.tankSize ?? 0)} onChange={handleChange} />
+              <input
+                type="number"
+                name="tankSize"
+                value={Number(form.tankSize ?? 0)}
+                onChange={handleChange}
+              />
             </div>
 
             <div className="field">
               <label>Power steering</label>
-              <input name="poweredSteering" value={String(form.poweredSteering ?? "")} onChange={handleChange} />
+              <input
+                name="poweredSteering"
+                value={String(form.poweredSteering ?? "")}
+                onChange={handleChange}
+              />
             </div>
           </div>
         </>
@@ -766,47 +934,83 @@ function SpecsTab({ form, isBike, isCar, handleChange }: SpecsTabProps) {
       <div className="form-grid">
         <div className="field">
           <label>Front type</label>
-          <input name="frontType" value={String(form.frontType ?? "")} onChange={handleChange} />
+          <input
+            name="frontType"
+            value={String(form.frontType ?? "")}
+            onChange={handleChange}
+          />
         </div>
 
         <div className="field">
           <label>Rear / Back type</label>
-          <input name="backType" value={String(form.backType ?? "")} onChange={handleChange} />
+          <input
+            name="backType"
+            value={String(form.backType ?? "")}
+            onChange={handleChange}
+          />
         </div>
 
         <div className="field">
           <label>Front tyre</label>
-          <input name="tyreSizeFront" value={String(form.tyreSizeFront ?? "")} onChange={handleChange} />
+          <input
+            name="tyreSizeFront"
+            value={String(form.tyreSizeFront ?? "")}
+            onChange={handleChange}
+          />
         </div>
 
         <div className="field">
           <label>Rear tyre</label>
-          <input name="tyreSizeBack" value={String(form.tyreSizeBack ?? "")} onChange={handleChange} />
+          <input
+            name="tyreSizeBack"
+            value={String(form.tyreSizeBack ?? "")}
+            onChange={handleChange}
+          />
         </div>
 
         <div className="field">
           <label>Tyre type</label>
-          <input name="tyreType" value={String(form.tyreType ?? "")} onChange={handleChange} />
+          <input
+            name="tyreType"
+            value={String(form.tyreType ?? "")}
+            onChange={handleChange}
+          />
         </div>
 
         <div className="field">
           <label>Front brake</label>
-          <input name="frontBrake" value={String(form.frontBrake ?? "")} onChange={handleChange} />
+          <input
+            name="frontBrake"
+            value={String(form.frontBrake ?? "")}
+            onChange={handleChange}
+          />
         </div>
 
         <div className="field">
           <label>Rear brake</label>
-          <input name="backBrake" value={String(form.backBrake ?? "")} onChange={handleChange} />
+          <input
+            name="backBrake"
+            value={String(form.backBrake ?? "")}
+            onChange={handleChange}
+          />
         </div>
 
         <div className="field">
           <label>Wheel material</label>
-          <input name="wheelMaterial" value={String(form.wheelMaterial ?? "")} onChange={handleChange} />
+          <input
+            name="wheelMaterial"
+            value={String(form.wheelMaterial ?? "")}
+            onChange={handleChange}
+          />
         </div>
 
         <div className="field">
           <label>Spare</label>
-          <input name="spare" value={String(form.spare ?? "")} onChange={handleChange} />
+          <input
+            name="spare"
+            value={String(form.spare ?? "")}
+            onChange={handleChange}
+          />
         </div>
       </div>
     </>

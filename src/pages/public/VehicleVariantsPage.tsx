@@ -1,16 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { getPublicVehicleBySlug } from "../../features/vehicles/api";
-import type {
-  VehicleVariantDto,
-  VehicleWithDetailsDto,
-} from "../../features/vehicles/types";
-
-type VariantFilterFields = {
-  fuelType?: string | null;
-  transmission?: string | null;
-  slug?: string | null;
-};
+import type { VehicleVariantDto, VehicleWithDetailsDto } from "../../features/vehicles/types";
 
 function toMessage(err: unknown, fallback: string) {
   return err instanceof Error ? err.message : fallback;
@@ -40,18 +31,15 @@ function uniqSorted(values: string[]) {
 }
 
 function getFuelType(v: VehicleVariantDto): string {
-  const x = v as VehicleVariantDto & VariantFilterFields;
-  return norm(x.fuelType);
+  return norm(v.fuelType);
 }
 
 function getTransmission(v: VehicleVariantDto): string {
-  const x = v as VehicleVariantDto & VariantFilterFields;
-  return norm(x.transmission);
+  return norm(v.transmission);
 }
 
 function getVariantSlug(v: VehicleVariantDto): string {
-  const x = v as VehicleVariantDto & VariantFilterFields;
-  const fromDto = typeof x.slug === "string" ? x.slug.trim() : "";
+  const fromDto = typeof v.slug === "string" ? v.slug.trim() : "";
   if (fromDto) return fromDto;
   const name = v.name?.trim() || "";
   return slugifyVariantName(name);
@@ -70,9 +58,7 @@ export function VehicleVariantsPage() {
   const [onlyDefault, setOnlyDefault] = useState(false);
   const [minPrice, setMinPrice] = useState<string>("");
   const [maxPrice, setMaxPrice] = useState<string>("");
-  const [sort, setSort] = useState<"default" | "price_asc" | "price_desc" | "name_asc">(
-    "default"
-  );
+  const [sort, setSort] = useState<"default" | "price_asc" | "price_desc" | "name_asc">("default");
   const [fuel, setFuel] = useState<string>("all");
   const [transmission, setTransmission] = useState<string>("all");
 
@@ -136,8 +122,9 @@ export function VehicleVariantsPage() {
       transmission !== "all" &&
       transmissionOptions.length > 0 &&
       !transmissionOptions.includes(norm(transmission))
-    )
+    ) {
       setTransmission("all");
+    }
   }, [transmission, transmissionOptions]);
 
   const stats = useMemo(() => {

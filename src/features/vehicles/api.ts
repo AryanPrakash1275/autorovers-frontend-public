@@ -224,6 +224,14 @@ function clampPageSize(n: unknown): number {
   return Math.min(MAX_PAGE_SIZE, Math.floor(v));
 }
 
+function safeDecode(s: string): string {
+  try {
+    return decodeURIComponent(s);
+  } catch {
+    return s;
+  }
+}
+
 export async function getVehicles(): Promise<VehicleListItem[]> {
   return apiGet<VehicleListItem[]>(ADMIN_VEHICLES_PATH);
 }
@@ -232,9 +240,7 @@ export async function getVehicle(id: number): Promise<Vehicle> {
   return apiGet<Vehicle>(`${ADMIN_VEHICLES_PATH}/${id}`);
 }
 
-export async function createVehicle(
-  payload: CreateVehicleRequest
-): Promise<{ id: number }> {
+export async function createVehicle(payload: CreateVehicleRequest): Promise<{ id: number }> {
   return apiPost<CreateVehicleRequest, { id: number }>(ADMIN_VEHICLES_PATH, payload);
 }
 
@@ -250,19 +256,11 @@ export function getVehicleWithDetails(id: number): Promise<VehicleWithDetailsDto
   return apiGet<VehicleWithDetailsDto>(`${ADMIN_VEHICLES_PATH}/${id}/details`);
 }
 
-export function updateVehicleDetails(
-  id: number,
-  payload: UpdateVehicleDetailsRequest
-): Promise<void> {
-  return apiPut<UpdateVehicleDetailsRequest, void>(
-    `${ADMIN_VEHICLES_PATH}/${id}/details`,
-    payload
-  );
+export function updateVehicleDetails(id: number, payload: UpdateVehicleDetailsRequest): Promise<void> {
+  return apiPut<UpdateVehicleDetailsRequest, void>(`${ADMIN_VEHICLES_PATH}/${id}/details`, payload);
 }
 
-export async function getPublicVehicles(
-  query: PublicVehiclesQuery
-): Promise<PagedResult<VehicleListItem>> {
+export async function getPublicVehicles(query: PublicVehiclesQuery): Promise<PagedResult<VehicleListItem>> {
   const type = query.type?.trim();
   if (!type) throw new Error("PublicVehiclesQuery.type is required");
 
@@ -295,8 +293,16 @@ export async function getPublicVehicles(
 }
 
 export async function getPublicVehicleBySlug(slug: string): Promise<VehicleWithDetailsDto> {
-  return apiGet<VehicleWithDetailsDto>(
-    `${PUBLIC_VEHICLES_PATH}/slug/${encodeURIComponent(slug)}`
+  const s = safeDecode(slug).trim();
+  return apiGet<VehicleWithDetailsDto>(`${PUBLIC_VEHICLES_PATH}/slug/${encodeURIComponent(s)}`);
+}
+
+export async function getPublicVariantBySlug(vehicleSlug: string, variantSlug: string): Promise<VehicleVariantDto> {
+  const v = safeDecode(vehicleSlug).trim();
+  const vs = safeDecode(variantSlug).trim();
+
+  return apiGet<VehicleVariantDto>(
+    `${PUBLIC_VEHICLES_PATH}/slug/${encodeURIComponent(v)}/variants/${encodeURIComponent(vs)}`
   );
 }
 
@@ -304,9 +310,45 @@ export async function getAdminVariants(vehicleId: number): Promise<VehicleVarian
   return apiGet<VehicleVariantDto[]>(`/api/Admin/Vehicles/${vehicleId}/variants`);
 }
 
+export async function createAdminVariant(
+  vehicleId: number,
+  payload: {
+    name: string;
+    code?: string | null;
+    isDefault?: boolean;
+    isActive?: boolean;
+    exShowroomPrice?: number | null;
+    priceDelta?: number | null;
+    transmission?: string | null;
+    powertrain?: number | null;
+    imageUrl?: string | null;
+    slug?: string | null;
+  }
+): Promise<{ id: number }> {
+  return apiPost<typeof payload, { id: number }>(
+    `/api/Admin/Vehicles/${vehicleId}/variants`,
+    payload
+  );
+}
+
 export async function updateAdminVariant(
   variantId: number,
-  payload: { exShowroomPrice?: number; isDefault?: boolean; isActive?: boolean }
+  payload: {
+    name?: string | null;
+    code?: string | null;
+    isDefault?: boolean;
+    isActive?: boolean;
+    exShowroomPrice?: number | null;
+    priceDelta?: number | null;
+    transmission?: string | null;
+    powertrain?: number | null;
+    imageUrl?: string | null;
+    slug?: string | null;
+  }
 ): Promise<void> {
-  return apiPut<typeof payload, void>(`/api/Admin/Variants/${variantId}`, payload);
+  return apiPut<typeof payload, void>(`/api/AdminVariants/${variantId}`, payload);
+}
+
+export async function deleteAdminVariant(variantId: number): Promise<void> {
+  return apiDelete<void>(`/api/AdminVariants/${variantId}`);
 }
